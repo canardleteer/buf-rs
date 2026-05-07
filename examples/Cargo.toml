@@ -1,0 +1,25 @@
+[package]
+name = "buf-sys-examples"
+description = "Runnable examples for buf-sys (workspace-local)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+publish = false
+
+[dependencies]
+buf-sys = { workspace = true }
+protoc-bin-vendored = "3"
+
+[[example]]
+name = "buf_lint"
+path = "buf_lint.rs"
+
+[[example]]
+name = "protoc_with_buf_plugins"
+path = "protoc_with_buf_plugins.rs"
