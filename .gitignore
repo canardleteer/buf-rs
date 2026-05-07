@@ -1,0 +1,7 @@
+/target
+buf-sys/bin/*
+!buf-sys/bin/.gitkeep
+.rumdl_cache/
+
+# Buf images produced locally for `examples/` (see README).
+examples/proto/*.binpb
