@@ -22,6 +22,27 @@ pub fn protoc_gen_buf_lint_bin_path() -> PathBuf {
     PathBuf::from(env!("BUF_RS_PROTOC_GEN_BUF_LINT"))
 }
 
+/// Resolved build layout mode from `BUF_RS_LAYOUT_MODE` at compile time.
+///
+/// Values are one of: `cache`, `cache-link`, `cache-verified-link`, `target`.
+#[must_use]
+pub fn resolved_layout_mode() -> &'static str {
+    env!("BUF_RS_LAYOUT_MODE_RESOLVED")
+}
+
+/// Optional target landing-pad root for non-default layout modes.
+///
+/// Returns `None` when the default `cache` layout mode is active.
+#[must_use]
+pub fn bin_layout_root() -> Option<PathBuf> {
+    let s = env!("BUF_RS_BIN_LAYOUT_ROOT");
+    if s.is_empty() {
+        None
+    } else {
+        Some(PathBuf::from(s))
+    }
+}
+
 /// When **`BUF_RS_INCLUDE_SOURCE=1`** was set at build time, the extracted upstream tree.
 #[must_use]
 pub fn upstream_source_root() -> Option<PathBuf> {
@@ -107,6 +128,18 @@ mod tests {
         ] {
             let p = path_fn();
             assert_plugin_payload(&p);
+        }
+    }
+
+    #[test]
+    fn layout_mode_metadata_is_present() {
+        let mode = crate::resolved_layout_mode();
+        assert!(matches!(
+            mode,
+            "cache" | "cache-link" | "cache-verified-link" | "target"
+        ));
+        if mode == "cache" {
+            assert!(crate::bin_layout_root().is_none());
         }
     }
 

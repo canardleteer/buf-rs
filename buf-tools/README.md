@@ -5,12 +5,87 @@ Rust paths to the official **[Buf](https://github.com/bufbuild/buf)** CLI and bu
 ## What this crate does (read this first)
 
 The **crates.io package does not contain** the executables. They are larger
-than the registry upload limit, so on **first build** this crate’s **`build.rs`**
+than the crates.io upload cap (~10 MiB per package), so on **first build**
+this crate’s **`build.rs`**
 downloads them from **`bufbuild/buf` GitHub releases**, verifies
 **[minisign](https://jedisct1.github.io/minisign/)** + **`sha256.txt`**, then
 installs them under Cargo’s **`OUT_DIR`**. Same **upstream artifacts** you would
 get from the official release — **pinned by this crate’s semver** — but
 **fetched at compile time**, not shipped inside the `.crate` file.
+
+## Layout mode (`BUF_RS_LAYOUT_MODE`)
+
+`BUF_RS_LAYOUT_MODE` is a compile-time selector for where `buf-tools` exposes
+executables:
+
+- `cache` (default; also used when unset/empty): current behavior, binaries land
+  under Cargo `OUT_DIR` and downloads are backed by persistent cache.
+- `cache-link`: populate/use persistent cache, then expose binaries at
+  `target/buf-tools/<semver-core>/<TARGET>/bin` via symlink (fallback to copy
+  when symlink is unavailable).
+- `cache-verified-link`: same as `cache-link`, but explicitly re-verifies cache
+  artifacts against trusted release metadata before linking/copying.
+- `target`: bypass persistent cache and keep downloaded artifacts under
+  `target/buf-tools/<semver-core>/<TARGET>/...` (convenient but more re-download
+  prone after cleanups).
+
+By default (`build_log=warn`), happy-path builds stay quiet while edge-case
+diagnostics still emit as warnings. Set `BUF_RS_BUILD_LOG=verbose` for full
+detail, or `BUF_RS_BUILD_LOG=silent` to suppress warning output entirely.
+
+Example:
+
+```bash
+BUF_RS_LAYOUT_MODE=cache-link cargo build -p buf-tools
+```
+
+## Build-script logging (`BUF_RS_BUILD_LOG`)
+
+- `warn` (default; also used by unset/empty and `true`): emit edge-case
+  diagnostics and build failures, suppress normal info/progress.
+- `verbose`: emit full informational/progress output.
+- `silent` (also used by `false`): suppress build-script warnings entirely.
+- Cargo caveat: build scripts only expose user-visible output through
+  `cargo:warning=`. These levels control emission policy, not Cargo severity
+  classes.
+
+## Source-controlled configuration
+
+`buf-tools` also supports source-controlled defaults in `Cargo.toml` metadata:
+
+```toml
+[workspace.metadata.buf-tools.config]
+layout_mode = "cache-link"
+build_log = "warn"
+cache_dir = "target/buf-rs-cache"
+release_base_url = "https://github.com/bufbuild/buf/releases/download/v1.69.0/"
+source_base_url = "https://github.com/bufbuild/buf/archive/refs/tags/"
+```
+
+You can also override per package:
+
+```toml
+[package.metadata.buf-tools.config]
+layout_mode = "target"
+build_log = "verbose"
+```
+
+Supported keys:
+
+- `layout_mode`: `cache`, `cache-link`, `cache-verified-link`, or `target`
+- `build_log`: `warn`, `verbose`, `silent` (`true` aliases `warn`; `false` aliases `silent`)
+- `cache_dir`: cache root directory path
+- `release_base_url`: release asset base URL
+- `source_base_url`: source archive base URL
+
+Resolution order is:
+
+1. Built-in defaults
+2. `[workspace.metadata.buf-tools.config]`
+3. `[package.metadata.buf-tools.config]`
+4. Environment variables (**highest precedence**)
+
+Environment variables may also be set via `.cargo/config.toml` `[env]`.
 
 ## Network and authentication
 
@@ -28,7 +103,7 @@ Downloaded blobs are stored under:
   via the **`dirs`** crate — see implementation).
 
 After a successful download, **`cargo clean`** does **not** wipe this cache;
-routine rebuilds reuse verified files and print a short **“using cached …”** message.
+routine rebuilds reuse verified files.
 
 ## Optional upstream source (`BUF_RS_INCLUDE_SOURCE`)
 

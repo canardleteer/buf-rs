@@ -31,6 +31,31 @@ lineage.
   **`sha256.txt`**, and caches under **`BUF_RS_CACHE_DIR`** or **`~/.cache/buf-tools/`**
   (see [`buf-tools/README.md`](buf-tools/README.md)).
 
+### Maintainer note — buf-tools configuration sources
+
+When changing `buf-tools` configuration behavior, keep all related config sites,
+call sites, and docs aligned:
+
+1. **Environment variables** (highest precedence): `BUF_RS_LAYOUT_MODE`,
+   `BUF_RS_BUILD_LOG`, `BUF_RS_CACHE_DIR`, `BUF_RS_RELEASE_BASE_URL`,
+   `BUF_RS_SOURCE_BASE_URL`.
+2. **Workspace metadata defaults**:
+   `[workspace.metadata.buf-tools.config]` in the consumer `Cargo.toml`.
+3. **Package metadata overrides**:
+   `[package.metadata.buf-tools.config]` in the consumer `Cargo.toml`.
+4. **Optional env injection** via `.cargo/config.toml` `[env]`.
+
+Primary config resolution/consumption call sites:
+
+- [`buf-tools/build.rs`](buf-tools/build.rs) (effective value resolution and usage).
+- [`buf-tools/build_support/config.rs`](buf-tools/build_support/config.rs)
+  (metadata parsing + precedence merge).
+
+Documentation that must stay in sync when keys/preference/precedence change:
+
+- [`buf-tools/README.md`](buf-tools/README.md)
+- workspace [`README.md`](README.md)
+
 ## Publishing
 
 The workspace sets **`publish = true`** for the publishable crate. To ship **`buf-tools`**
