@@ -1,0 +1,36 @@
+[package]
+name = "buf-toolchain"
+description = "Installer for official Buf CLI binaries pinned by crate semver."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "README.md"
+keywords.workspace = true
+categories.workspace = true
+publish.workspace = true
+
+include = [
+    "Cargo.toml",
+    "README.md",
+    "src/**/*.rs",
+    "build.rs",
+]
+
+[[bin]]
+name = "buf-toolchain"
+path = "src/main.rs"
+
+[dependencies]
+buf-sys = { workspace = true }
+dirs = "6"
+
+[build-dependencies]
+dirs = "6"
+hex = "0.4"
+minisign-verify = "0.2.5"
+semver = "1"
+sha2 = "0.10"
+ureq = "2.12"

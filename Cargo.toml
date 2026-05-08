@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "examples",
     "buf-sys",
+    "buf-toolchain",
 ]
 
 [workspace.package]
@@ -19,3 +20,4 @@ publish = true
 
 [workspace.dependencies]
 buf-sys = { path = "buf-sys", version = "=1.69.0" }
+buf-toolchain = { path = "buf-toolchain", version = "=1.69.0" }
