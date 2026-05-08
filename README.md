@@ -9,16 +9,19 @@
 > Decide if that degree of automation is appropriate for your requirements.
 
 Rust workspace distributing the official [`buf`](https://github.com/bufbuild/buf)
-CLI plus `protoc-gen-buf-breaking` and `protoc-gen-buf-lint` via the
-**`buf-sys`** crate. Binaries are **pinned** to upstream Buf releases
-(**minisign** + **`sha256.txt`**) but **downloaded at compile time** — see
-**[`buf-sys/README.md`](buf-sys/README.md)** for cache layout,
-**`BUF_VENDOR_INCLUDE_SOURCE`**, and honest wording about “vendored in spirit.”
+CLI plus `protoc-gen-buf-breaking` and `protoc-gen-buf-lint` via two crates:
+**`buf-sys`** for Rust dependency integration and **`buf-toolchain`** for
+managed install directories. Binaries are **pinned** to upstream Buf releases
+(**minisign** + **`sha256.txt`**) and downloaded on the consumer machine.
 
 Repository home: **[github.com/canardleteer/buf-sys](https://github.com/canardleteer/buf-sys)**
 (rename may lag the crate; URLs in **`Cargo.toml`** should match the canonical repo).
 
 ## Usage
+
+Use one of these two installation patterns, depending on whether you are wiring Buf into Rust code or installing a managed toolchain directory.
+
+### `buf-sys` (Cargo.toml dependency)
 
 ```toml
 [dependencies]
@@ -31,6 +34,20 @@ use std::process::Command;
 let buf = buf_sys::buf_bin_path();
 let _ = Command::new(buf).arg("--version").status();
 ```
+
+### `buf-toolchain` (`cargo install`)
+
+```bash
+cargo install buf-toolchain
+```
+
+The `buf-toolchain` build step downloads and verifies official release artifacts, then installs available binaries into a managed directory:
+
+- `BUF_CARGO_TOOLCHAIN_BIN_DIR` (optional) installs directly into this flat directory.
+- Otherwise install path defaults to `$CARGO_HOME/buf-toolchain/<version-core>/<target>/bin` (or `~/.cargo/buf-toolchain/...` when `CARGO_HOME` is unset).
+- `BUF_SYS_CACHE_DIR` (optional) overrides the download cache root.
+
+See [`buf-toolchain/README.md`](buf-toolchain/README.md) for full env-var precedence and examples.
 
 ## Supported targets
 
