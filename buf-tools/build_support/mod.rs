@@ -1,6 +1,7 @@
 //! Shared logic for `buf-tools` build script and `vendor-sync`.
 #![allow(dead_code)]
 
+pub mod config;
 pub mod fetch;
 pub mod lock;
 pub mod source;

@@ -116,4 +116,5 @@ minisign-verify = "0.2.5"
 semver = "1"
 sha2 = "0.10"
 tar = "0.4"
+toml = { version = "0.8", default-features = false, features = ["parse"] }
 ureq = "2.12"

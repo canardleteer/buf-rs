@@ -14,6 +14,11 @@ CLI plus `protoc-gen-buf-breaking` and `protoc-gen-buf-lint` via two crates:
 managed install directories. Binaries are **pinned** to upstream Buf releases
 (**minisign** + **`sha256.txt`**) and downloaded on the consumer machine.
 
+Why build-time download is required: official Buf binaries are too large to ship
+inside a crates.io package (the registry cap is about 10 MiB per crate upload),
+so `buf-tools` cannot vendor binaries the way some smaller binary-vendoring
+crates do.
+
 Repository home: **[github.com/canardleteer/buf-rs](https://github.com/canardleteer/buf-rs)**
 (rename may lag the crate; URLs in **`Cargo.toml`** should match the canonical repo).
 
@@ -54,6 +59,11 @@ artifacts, then installs available binaries into a managed directory:
   for both crates.
 - `BUF_RS_SOURCE_BASE_URL` (optional, `buf-tools` only) overrides optional
   upstream source tarball base URL.
+- `BUF_RS_BUILD_LOG` (optional, `buf-tools` only) controls build-script logging
+  policy (`warn`, `verbose`, `silent`).
+- `buf-tools` also supports source-controlled defaults in
+  `[workspace.metadata.buf-tools.config]` and
+  `[package.metadata.buf-tools.config]` (env vars still take precedence).
 
 See [`buf-toolchain/README.md`](buf-toolchain/README.md) for full env-var precedence and examples.
 
