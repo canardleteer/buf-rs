@@ -93,10 +93,10 @@ HTTP fetch — with a clear error.
 | Asset suffix      | Rust target triples                                                        | Min Buf version |
 | ----------------- | -------------------------------------------------------------------------- | --------------- |
 | `Linux-x86_64`    | `x86_64-unknown-linux-{gnu,musl}`                                          | 1.0.0           |
-| `Linux-aarch64`   | `aarch64-unknown-linux-{gnu,musl}`                                       | 1.0.0           |
-| `Linux-armv7`     | `arm-unknown-linux-{gnueabihf,musleabihf}`                               | 1.47.0          |
-| `Linux-ppc64le`   | `powerpc64le-unknown-linux-gnu`                                          | 1.54.0          |
-| `Linux-riscv64`   | `riscv64gc-unknown-linux-gnu`, `riscv64-unknown-linux-gnu`               | 1.54.0          |
+| `Linux-aarch64`   | `aarch64-unknown-linux-{gnu,musl}`                                         | 1.0.0           |
+| `Linux-armv7`     | `arm-unknown-linux-{gnueabihf,musleabihf}`                                 | 1.47.0          |
+| `Linux-ppc64le`   | `powerpc64le-unknown-linux-gnu`                                            | 1.54.0          |
+| `Linux-riscv64`   | `riscv64gc-unknown-linux-gnu`, `riscv64-unknown-linux-gnu`                 | 1.54.0          |
 | `Linux-s390x`     | `s390x-unknown-linux-gnu`                                                  | 1.56.0          |
 | `Darwin-x86_64`   | `x86_64-apple-darwin`                                                      | 1.0.0           |
 | `Darwin-arm64`    | `aarch64-apple-darwin`                                                     | 1.0.0           |
