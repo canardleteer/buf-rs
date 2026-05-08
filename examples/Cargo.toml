@@ -1,6 +1,6 @@
 [package]
-name = "buf-sys-examples"
-description = "Runnable examples for buf-sys (workspace-local)."
+name = "buf-tools-examples"
+description = "Runnable examples for buf-tools (workspace-local)."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -13,7 +13,7 @@ categories.workspace = true
 publish = false
 
 [dependencies]
-buf-sys = { workspace = true }
+buf-tools = { workspace = true }
 protoc-bin-vendored = "3"
 
 [[example]]

@@ -24,7 +24,7 @@ name = "buf-toolchain"
 path = "src/main.rs"
 
 [dependencies]
-buf-sys = { workspace = true }
+buf-tools = { workspace = true }
 dirs = "6"
 
 [build-dependencies]

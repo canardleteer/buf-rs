@@ -1,5 +1,5 @@
 [package]
-name = "buf-sys"
+name = "buf-tools"
 description = "Official Buf CLI binaries from bufbuild/buf releases — fetched and verified at build time (see README)."
 version.workspace = true
 edition.workspace = true
@@ -29,72 +29,72 @@ bench = false
 [package.metadata.docs.rs]
 rustc-args = ["--cfg", "docsrs"]
 
-[package.metadata.buf-sys.targets.Linux-x86_64]
+[package.metadata.buf-tools.targets.Linux-x86_64]
 min_version = "1.0.0"
 rust_triples = ["x86_64-unknown-linux-gnu", "x86_64-unknown-linux-musl"]
 windows = false
 
-[package.metadata.buf-sys.targets.Linux-aarch64]
+[package.metadata.buf-tools.targets.Linux-aarch64]
 min_version = "1.0.0"
 rust_triples = ["aarch64-unknown-linux-gnu", "aarch64-unknown-linux-musl"]
 windows = false
 
-[package.metadata.buf-sys.targets.Linux-armv7]
+[package.metadata.buf-tools.targets.Linux-armv7]
 min_version = "1.47.0"
 rust_triples = ["arm-unknown-linux-gnueabihf", "arm-unknown-linux-musleabihf"]
 windows = false
 
-[package.metadata.buf-sys.targets.Linux-ppc64le]
+[package.metadata.buf-tools.targets.Linux-ppc64le]
 min_version = "1.54.0"
 rust_triples = ["powerpc64le-unknown-linux-gnu"]
 windows = false
 
-[package.metadata.buf-sys.targets.Linux-riscv64]
+[package.metadata.buf-tools.targets.Linux-riscv64]
 min_version = "1.54.0"
 rust_triples = ["riscv64gc-unknown-linux-gnu", "riscv64-unknown-linux-gnu"]
 windows = false
 
-[package.metadata.buf-sys.targets.Linux-s390x]
+[package.metadata.buf-tools.targets.Linux-s390x]
 min_version = "1.56.0"
 rust_triples = ["s390x-unknown-linux-gnu"]
 windows = false
 
-[package.metadata.buf-sys.targets.Darwin-x86_64]
+[package.metadata.buf-tools.targets.Darwin-x86_64]
 min_version = "1.0.0"
 rust_triples = ["x86_64-apple-darwin"]
 windows = false
 
-[package.metadata.buf-sys.targets.Darwin-arm64]
+[package.metadata.buf-tools.targets.Darwin-arm64]
 min_version = "1.0.0"
 rust_triples = ["aarch64-apple-darwin"]
 windows = false
 
-[package.metadata.buf-sys.targets.Windows-x86_64]
+[package.metadata.buf-tools.targets.Windows-x86_64]
 min_version = "1.0.0"
 rust_triples = ["x86_64-pc-windows-gnu", "x86_64-pc-windows-msvc"]
 windows = true
 
-[package.metadata.buf-sys.targets.Windows-arm64]
+[package.metadata.buf-tools.targets.Windows-arm64]
 min_version = "1.0.0"
 rust_triples = ["aarch64-pc-windows-msvc", "aarch64-pc-windows-gnu"]
 windows = true
 
-[package.metadata.buf-sys.targets.FreeBSD-x86_64]
+[package.metadata.buf-tools.targets.FreeBSD-x86_64]
 min_version = "1.67.0"
 rust_triples = ["x86_64-unknown-freebsd"]
 windows = false
 
-[package.metadata.buf-sys.targets.FreeBSD-arm64]
+[package.metadata.buf-tools.targets.FreeBSD-arm64]
 min_version = "1.67.0"
 rust_triples = ["aarch64-unknown-freebsd"]
 windows = false
 
-[package.metadata.buf-sys.targets.OpenBSD-x86_64]
+[package.metadata.buf-tools.targets.OpenBSD-x86_64]
 min_version = "1.67.0"
 rust_triples = ["x86_64-unknown-openbsd"]
 windows = false
 
-[package.metadata.buf-sys.targets.OpenBSD-arm64]
+[package.metadata.buf-tools.targets.OpenBSD-arm64]
 min_version = "1.67.0"
 rust_triples = ["aarch64-unknown-openbsd"]
 windows = false

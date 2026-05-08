@@ -212,7 +212,7 @@ mod tests {
     use std::collections::{HashMap, HashSet};
     use std::fs;
 
-    const METADATA_DRIFT_MSG: &str = "Cargo.toml `[package.metadata.buf-sys.targets]` and Rust `ALL` are out of sync. Reminder: also update the `Supported targets` table in `README.md` and the per-target list in `AGENTS.md`.";
+    const METADATA_DRIFT_MSG: &str = "Cargo.toml `[package.metadata.buf-tools.targets]` and Rust `ALL` are out of sync. Reminder: also update the `Supported targets` table in `README.md` and the per-target list in `AGENTS.md`.";
 
     #[test]
     fn every_target_has_parseable_min_version() {
@@ -254,10 +254,10 @@ mod tests {
         let targets_tbl = value
             .get("package")
             .and_then(|p| p.get("metadata"))
-            .and_then(|m| m.get("buf-sys"))
+            .and_then(|m| m.get("buf-tools"))
             .and_then(|b| b.get("targets"))
             .and_then(|t| t.as_table())
-            .expect("missing [package.metadata.buf-sys.targets]");
+            .expect("missing [package.metadata.buf-tools.targets]");
 
         let mut rust_by_suffix: HashMap<&'static str, ReleaseTarget> = HashMap::new();
         for t in ALL {

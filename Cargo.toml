@@ -2,7 +2,7 @@
 resolver = "2"
 members = [
     "examples",
-    "buf-sys",
+    "buf-tools",
     "buf-toolchain",
 ]
 
@@ -11,13 +11,13 @@ version = "1.69.0"
 edition = "2024"
 license = "MIT"
 authors = ["canardleteer <eris.has.a.dad+github@gmail.com>"]
-repository = "https://github.com/canardleteer/buf-sys"
-homepage = "https://github.com/canardleteer/buf-sys"
+repository = "https://github.com/canardleteer/buf-rs"
+homepage = "https://github.com/canardleteer/buf-rs"
 readme = "README.md"
 keywords = ["buf", "protoc", "protobuf", "vendored", "cli"]
 categories = ["development-tools", "api-bindings"]
 publish = true
 
 [workspace.dependencies]
-buf-sys = { path = "buf-sys", version = "=1.69.0" }
+buf-tools = { path = "buf-tools", version = "=1.69.0" }
 buf-toolchain = { path = "buf-toolchain", version = "=1.69.0" }

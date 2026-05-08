@@ -1,4 +1,4 @@
-# buf-sys
+# buf-tools
 
 Rust paths to the official **[Buf](https://github.com/bufbuild/buf)** CLI and bundled `protoc-gen-buf-*` plugins.
 
@@ -22,20 +22,20 @@ get from the official release — **pinned by this crate’s semver** — but
 
 Downloaded blobs are stored under:
 
-- **`$BUF_SYS_CACHE_DIR/<semver-core>/<TARGET>/`** if **`BUF_SYS_CACHE_DIR`**
+- **`$BUF_RS_CACHE_DIR/<semver-core>/<TARGET>/`** if **`BUF_RS_CACHE_DIR`**
   is set, else
-- **`$XDG_CACHE_HOME/buf-sys/<semver-core>/<TARGET>/`** (with platform fallbacks
+- **`$XDG_CACHE_HOME/buf-tools/<semver-core>/<TARGET>/`** (with platform fallbacks
   via the **`dirs`** crate — see implementation).
 
 After a successful download, **`cargo clean`** does **not** wipe this cache;
 routine rebuilds reuse verified files and print a short **“using cached …”** message.
 
-## Optional upstream source (`BUF_VENDOR_INCLUDE_SOURCE`)
+## Optional upstream source (`BUF_RS_INCLUDE_SOURCE`)
 
-When **`BUF_VENDOR_INCLUDE_SOURCE=1`** (or `true` / `yes`), **`build.rs`** also
+When **`BUF_RS_INCLUDE_SOURCE=1`** (or `true` / `yes`), **`build.rs`** also
 downloads the **tagged source archive** from GitHub
 (`archive/refs/tags/v{X.Y.Z}.tar.gz`), extracts it under the cache slot, and
-sets **`BUF_SYS_SOURCE_ROOT`** for this build.
+sets **`BUF_RS_SOURCE_ROOT`** for this build.
 
 **Integrity note:** Binaries are verified with Buf’s **`sha256.txt`** +
 **minisign**. GitHub-generated **source tarballs are not covered by that

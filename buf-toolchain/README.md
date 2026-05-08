@@ -20,14 +20,14 @@ This installer is best-effort per target/version:
 
 Environment variable precedence:
 
-- `BUF_CARGO_TOOLCHAIN_BIN_DIR`: if set, install executables directly into this directory.
-- otherwise install under `BUF_CARGO_TOOLCHAIN_HOME/<version-core>/<target>/bin`.
-- `BUF_CARGO_TOOLCHAIN_HOME`: default install root override.
+- `BUF_RS_TOOLCHAIN_BIN_DIR`: if set, install executables directly into this directory.
+- otherwise install under `BUF_RS_TOOLCHAIN_HOME/<version-core>/<target>/bin`.
+- `BUF_RS_TOOLCHAIN_HOME`: default install root override.
 - default install root: `$CARGO_HOME/buf-toolchain`, then `~/.cargo/buf-toolchain` when `CARGO_HOME` is unset.
 
 Cache:
 
-- `BUF_SYS_CACHE_DIR`: optional cache root override.
+- `BUF_RS_CACHE_DIR`: optional cache root override.
 - default cache root: `$XDG_CACHE_HOME/buf-toolchain` with platform fallback via `dirs::cache_dir()`.
 
 ## Install
@@ -39,5 +39,5 @@ cargo install buf-toolchain
 To place the executables in a custom path:
 
 ```bash
-BUF_CARGO_TOOLCHAIN_BIN_DIR="$HOME/.local/bin" cargo install buf-toolchain
+BUF_RS_TOOLCHAIN_BIN_DIR="$HOME/.local/bin" cargo install buf-toolchain
 ```
