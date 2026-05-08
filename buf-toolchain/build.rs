@@ -24,9 +24,9 @@ struct ReleaseTarget {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("cargo:rerun-if-env-changed=BUF_CARGO_TOOLCHAIN_HOME");
-    println!("cargo:rerun-if-env-changed=BUF_CARGO_TOOLCHAIN_BIN_DIR");
-    println!("cargo:rerun-if-env-changed=BUF_SYS_CACHE_DIR");
+    println!("cargo:rerun-if-env-changed=BUF_RS_TOOLCHAIN_HOME");
+    println!("cargo:rerun-if-env-changed=BUF_RS_TOOLCHAIN_BIN_DIR");
+    println!("cargo:rerun-if-env-changed=BUF_RS_CACHE_DIR");
     println!("cargo:rerun-if-env-changed=CARGO_HOME");
     println!("cargo:rerun-if-env-changed=CARGO_NET_OFFLINE");
 
@@ -147,10 +147,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn resolve_install_bin_dir(core: &str, target_triple: &str) -> Result<PathBuf, String> {
-    if let Ok(dir) = env::var("BUF_CARGO_TOOLCHAIN_BIN_DIR") {
+    if let Ok(dir) = env::var("BUF_RS_TOOLCHAIN_BIN_DIR") {
         return Ok(PathBuf::from(dir));
     }
-    let home = if let Ok(dir) = env::var("BUF_CARGO_TOOLCHAIN_HOME") {
+    let home = if let Ok(dir) = env::var("BUF_RS_TOOLCHAIN_HOME") {
         PathBuf::from(dir)
     } else {
         cargo_home_dir()?.join("buf-toolchain")
@@ -159,7 +159,7 @@ fn resolve_install_bin_dir(core: &str, target_triple: &str) -> Result<PathBuf, S
 }
 
 fn resolve_cache_slot(core: &str, target_triple: &str) -> Result<PathBuf, String> {
-    let root = if let Ok(dir) = env::var("BUF_SYS_CACHE_DIR") {
+    let root = if let Ok(dir) = env::var("BUF_RS_CACHE_DIR") {
         PathBuf::from(dir)
     } else {
         dirs::cache_dir()

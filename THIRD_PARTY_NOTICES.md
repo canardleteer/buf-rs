@@ -31,13 +31,13 @@ Provenance:
 - Copyright: Buf Technologies, Inc. and contributors (per upstream notices).
 
 These artifacts are cached on the consumer's filesystem (under
-`$BUF_SYS_CACHE_DIR` or the platform cache directory). The Apache-2.0 terms
+`$BUF_RS_CACHE_DIR` or the platform cache directory). The Apache-2.0 terms
 governing those artifacts apply to the consumer's local copies; this crate
 neither modifies nor redistributes them.
 
 ## Optional upstream source
 
-When `BUF_VENDOR_INCLUDE_SOURCE=1` is set at build time, `build.rs` additionally
+When `BUF_RS_INCLUDE_SOURCE=1` is set at build time, `build.rs` additionally
 downloads the upstream tagged source archive
 (`archive/refs/tags/v<X.Y.Z>.tar.gz`) from `bufbuild/buf` and extracts it into
 the per-version cache slot for inspection / audit. That source is Apache-2.0

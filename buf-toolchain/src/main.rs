@@ -4,7 +4,7 @@ use std::path::PathBuf;
 fn main() {
     let version = env!("CARGO_PKG_VERSION");
     let target = current_rust_target();
-    let bin_dir = match env::var("BUF_CARGO_TOOLCHAIN_BIN_DIR") {
+    let bin_dir = match env::var("BUF_RS_TOOLCHAIN_BIN_DIR") {
         Ok(dir) => PathBuf::from(dir),
         Err(_) => install_home()
             .join(version_core(version))
@@ -14,14 +14,14 @@ fn main() {
 
     println!("buf-toolchain {}", version);
     println!("managed bin dir: {}", bin_dir.display());
-    println!("cache override env: BUF_SYS_CACHE_DIR");
-    println!("install root env: BUF_CARGO_TOOLCHAIN_HOME");
-    println!("bin dir override env: BUF_CARGO_TOOLCHAIN_BIN_DIR");
+    println!("cache override env: BUF_RS_CACHE_DIR");
+    println!("install root env: BUF_RS_TOOLCHAIN_HOME");
+    println!("bin dir override env: BUF_RS_TOOLCHAIN_BIN_DIR");
     println!("The build step installs upstream Buf executables into this managed directory.");
 }
 
 fn install_home() -> PathBuf {
-    if let Ok(home) = env::var("BUF_CARGO_TOOLCHAIN_HOME") {
+    if let Ok(home) = env::var("BUF_RS_TOOLCHAIN_HOME") {
         return PathBuf::from(home);
     }
     if let Ok(cargo_home) = env::var("CARGO_HOME") {

@@ -30,7 +30,20 @@ dependencies = [
 ]
 
 [[package]]
-name = "buf-sys"
+name = "buf-toolchain"
+version = "1.69.0"
+dependencies = [
+ "buf-tools",
+ "dirs",
+ "hex",
+ "minisign-verify",
+ "semver",
+ "sha2",
+ "ureq",
+]
+
+[[package]]
+name = "buf-tools"
 version = "1.69.0"
 dependencies = [
  "dirs",
@@ -45,24 +58,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "buf-sys-examples"
+name = "buf-tools-examples"
 version = "1.69.0"
 dependencies = [
- "buf-sys",
+ "buf-tools",
  "protoc-bin-vendored",
-]
-
-[[package]]
-name = "buf-toolchain"
-version = "1.69.0"
-dependencies = [
- "buf-sys",
- "dirs",
- "hex",
- "minisign-verify",
- "semver",
- "sha2",
- "ureq",
 ]
 
 [[package]]

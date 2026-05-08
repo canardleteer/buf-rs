@@ -2,7 +2,7 @@ use std::error::Error;
 use std::process::Command;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let buf = buf_sys::buf_bin_path();
+    let buf = buf_tools::buf_bin_path();
     let status = Command::new(buf)
         .arg("lint")
         .arg("proto") // Directory containing your buf.yaml and .proto files

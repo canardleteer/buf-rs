@@ -58,7 +58,7 @@ pub fn download_streaming_with_progress(
                 }
                 let wait_ms = 400_u64 * attempt as u64;
                 warn(format!(
-                    "buf-sys: transient download error for {label} (attempt {attempt}/{MAX_ATTEMPTS}): {err}; retry in {wait_ms}ms"
+                    "buf-tools: transient download error for {label} (attempt {attempt}/{MAX_ATTEMPTS}): {err}; retry in {wait_ms}ms"
                 ));
                 sleep(Duration::from_millis(wait_ms));
             }
@@ -88,7 +88,7 @@ fn download_streaming_once(
     let mut milestone_sent: i32 = 0;
 
     let mut chunk = [0u8; CHUNK];
-    warn(format!("buf-sys: downloading {label} — 0%"));
+    warn(format!("buf-tools: downloading {label} — 0%"));
 
     let mut last_mb_milestone: u64 = 0;
 
@@ -107,7 +107,7 @@ fn download_streaming_once(
                 if band > milestone_sent {
                     milestone_sent = band;
                     warn(format!(
-                        "buf-sys: {label} — {band}% ({read_total}/{t} bytes)"
+                        "buf-tools: {label} — {band}% ({read_total}/{t} bytes)"
                     ));
                 }
             }
@@ -116,7 +116,7 @@ fn download_streaming_once(
             if mb > last_mb_milestone && mb > 0 {
                 last_mb_milestone = mb;
                 warn(format!(
-                    "buf-sys: {label} — received ≥ {mb} MiB (no Content-Length)"
+                    "buf-tools: {label} — received ≥ {mb} MiB (no Content-Length)"
                 ));
             }
         }
@@ -124,11 +124,13 @@ fn download_streaming_once(
 
     if let Some(t) = total {
         if milestone_sent < 100 {
-            warn(format!("buf-sys: {label} — 100% ({read_total}/{t} bytes)"));
+            warn(format!(
+                "buf-tools: {label} — 100% ({read_total}/{t} bytes)"
+            ));
         }
     } else {
         warn(format!(
-            "buf-sys: {label} — finished ({read_total} bytes, no Content-Length)"
+            "buf-tools: {label} — finished ({read_total} bytes, no Content-Length)"
         ));
     }
 

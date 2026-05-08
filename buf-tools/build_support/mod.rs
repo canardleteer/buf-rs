@@ -1,4 +1,4 @@
-//! Shared logic for `buf-sys` build script and `vendor-sync`.
+//! Shared logic for `buf-tools` build script and `vendor-sync`.
 #![allow(dead_code)]
 
 pub mod fetch;
@@ -17,7 +17,7 @@ pub use verify::{
     verify_minisign_signature,
 };
 
-/// Cache layout: `<cache_root>/<semver-core>/<rust-target>/` where `cache_root` is `BUF_SYS_CACHE_DIR` or `~/.cache/buf-sys`.
+/// Cache layout: `<cache_root>/<semver-core>/<rust-target>/` where `cache_root` is `BUF_RS_CACHE_DIR` or `~/.cache/buf-tools`.
 pub fn cache_slot(cache_root: &Path, semver_core: &str, rust_target: &str) -> PathBuf {
     cache_root.join(semver_core).join(rust_target)
 }

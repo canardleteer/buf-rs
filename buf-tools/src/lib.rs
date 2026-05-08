@@ -9,23 +9,23 @@ use std::path::PathBuf;
 
 /// Path to the `buf` executable for this compilation target.
 pub fn buf_bin_path() -> PathBuf {
-    PathBuf::from(env!("BUF_SYS_BUF_BIN"))
+    PathBuf::from(env!("BUF_RS_BUF_BIN"))
 }
 
 /// Path to `protoc-gen-buf-breaking`.
 pub fn protoc_gen_buf_breaking_bin_path() -> PathBuf {
-    PathBuf::from(env!("BUF_SYS_PROTOC_GEN_BUF_BREAKING"))
+    PathBuf::from(env!("BUF_RS_PROTOC_GEN_BUF_BREAKING"))
 }
 
 /// Path to `protoc-gen-buf-lint`.
 pub fn protoc_gen_buf_lint_bin_path() -> PathBuf {
-    PathBuf::from(env!("BUF_SYS_PROTOC_GEN_BUF_LINT"))
+    PathBuf::from(env!("BUF_RS_PROTOC_GEN_BUF_LINT"))
 }
 
-/// When **`BUF_VENDOR_INCLUDE_SOURCE=1`** was set at build time, the extracted upstream tree.
+/// When **`BUF_RS_INCLUDE_SOURCE=1`** was set at build time, the extracted upstream tree.
 #[must_use]
 pub fn upstream_source_root() -> Option<PathBuf> {
-    let s = env!("BUF_SYS_SOURCE_ROOT");
+    let s = env!("BUF_RS_SOURCE_ROOT");
     if s.is_empty() {
         None
     } else {
@@ -132,14 +132,14 @@ mod tests {
 
     #[test]
     fn upstream_source_when_vendor_flag_set() {
-        if !std::env::var("BUF_VENDOR_INCLUDE_SOURCE")
+        if !std::env::var("BUF_RS_INCLUDE_SOURCE")
             .map(|v| matches!(v.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes"))
             .unwrap_or(false)
         {
             return;
         }
         let root = crate::upstream_source_root()
-            .expect("BUF_VENDOR_INCLUDE_SOURCE build must set BUF_SYS_SOURCE_ROOT");
+            .expect("BUF_RS_INCLUDE_SOURCE build must set BUF_RS_SOURCE_ROOT");
         assert!(root.is_dir(), "{:?}", root);
         assert!(
             root.join("README.md").is_file() || root.join("go.mod").is_file(),

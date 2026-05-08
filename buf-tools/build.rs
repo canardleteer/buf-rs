@@ -17,8 +17,8 @@ use build_support::{
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("cargo:rerun-if-env-changed=BUF_SYS_CACHE_DIR");
-    println!("cargo:rerun-if-env-changed=BUF_VENDOR_INCLUDE_SOURCE");
+    println!("cargo:rerun-if-env-changed=BUF_RS_CACHE_DIR");
+    println!("cargo:rerun-if-env-changed=BUF_RS_INCLUDE_SOURCE");
     println!("cargo:rerun-if-env-changed=CARGO_NET_OFFLINE");
 
     let out_dir = PathBuf::from(env::var_os("OUT_DIR").expect("OUT_DIR"));
@@ -34,20 +34,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ver = Version::parse(&pkg_version)?;
     let core = format!("{}.{}.{}", ver.major, ver.minor, ver.patch);
     let core_ver = Version::parse(&core)
-        .map_err(|e| format!("buf-sys: invalid semver core in CARGO_PKG_VERSION: {e}"))?;
+        .map_err(|e| format!("buf-tools: invalid semver core in CARGO_PKG_VERSION: {e}"))?;
 
     let rt =
         from_rust_triple(&target_triple).ok_or_else(|| {
             format!(
-                "buf-sys: unsupported compilation TARGET `{target_triple}`. See crate README for supported triples."
+                "buf-tools: unsupported compilation TARGET `{target_triple}`. See crate README for supported triples."
             )
         })?;
 
     let min = Version::parse(rt.min_version)
-        .map_err(|e| format!("buf-sys: bad min_version for {}: {e}", rt.asset_suffix))?;
+        .map_err(|e| format!("buf-tools: bad min_version for {}: {e}", rt.asset_suffix))?;
     if core_ver < min {
         return Err(format!(
-            "buf-sys: target `{}` requires Buf >= {} but crate is pinned to {} \
+            "buf-tools: target `{}` requires Buf >= {} but crate is pinned to {} \
              (Buf {} did not ship binaries for this platform). \
              Either pin a newer crate version or compile for a different target.",
             rt.asset_suffix, min, ver, core
@@ -71,7 +71,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let minisig = fetch::download(&minisig_url)?;
     let minisig_text = std::str::from_utf8(&minisig)?;
     let prehashed_min = Version::parse(PREHASHED_MINISIGN_MIN_VERSION)
-        .map_err(|e| format!("buf-sys: invalid PREHASHED_MINISIGN_MIN_VERSION: {e}"))?;
+        .map_err(|e| format!("buf-tools: invalid PREHASHED_MINISIGN_MIN_VERSION: {e}"))?;
     let allow_legacy = core_ver < prehashed_min;
     verify_minisign_signature(
         &sha256_txt,
@@ -83,7 +83,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     if !target_supported(&checksums, &rt) {
         return Err(format!(
-            "buf-sys: Buf release {tag} does not list binaries for this platform ({})",
+            "buf-tools: Buf release {tag} does not list binaries for this platform ({})",
             rt.asset_suffix
         )
         .into());
@@ -102,12 +102,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let url = format!("{base}{remote_name}");
 
         let bytes = if verify_cached_file(&cache_file, expected_hex)? {
-            warn_fn(format!("buf-sys: using cached {} (sha256 OK)", remote_name));
+            warn_fn(format!(
+                "buf-tools: using cached {} (sha256 OK)",
+                remote_name
+            ));
             fs::read(&cache_file)?
         } else {
             if offline {
                 return Err(format!(
-                    "buf-sys: CARGO_NET_OFFLINE set but cache miss for {} — populate {} or clear offline mode",
+                    "buf-tools: CARGO_NET_OFFLINE set but cache miss for {} — populate {} or clear offline mode",
                     remote_name,
                     cache_file.display()
                 )
@@ -130,10 +133,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let mut source_root: Option<PathBuf> = None;
-    if env_truthy("BUF_VENDOR_INCLUDE_SOURCE") {
+    if env_truthy("BUF_RS_INCLUDE_SOURCE") {
         if offline && source_bundle_ready(&slot, &core).is_none() {
             return Err(
-                "buf-sys: BUF_VENDOR_INCLUDE_SOURCE set but offline and source bundle not cached"
+                "buf-tools: BUF_RS_INCLUDE_SOURCE set but offline and source bundle not cached"
                     .into(),
             );
         }
@@ -181,7 +184,7 @@ fn fetch_optional_source(
 
     if expected_root.is_dir() {
         warn(format!(
-            "buf-sys: using cached extracted source at {}",
+            "buf-tools: using cached extracted source at {}",
             expected_root.display()
         ));
         return Ok(expected_root);
@@ -195,7 +198,7 @@ fn fetch_optional_source(
         fs::write(&archive_path, &bytes)?;
     } else {
         warn(format!(
-            "buf-sys: using cached source archive {}",
+            "buf-tools: using cached source archive {}",
             archive_path.display()
         ));
     }
@@ -207,27 +210,27 @@ fn fetch_optional_source(
 
     if !expected_root.is_dir() {
         return Err(format!(
-            "buf-sys: extracted source layout unexpected — missing {}",
+            "buf-tools: extracted source layout unexpected — missing {}",
             expected_root.display()
         )
         .into());
     }
 
     warn(format!(
-        "buf-sys: extracted upstream source at {}",
+        "buf-tools: extracted upstream source at {}",
         expected_root.display()
     ));
     Ok(expected_root)
 }
 
 fn cache_root_dir() -> Result<PathBuf, Box<dyn std::error::Error>> {
-    if let Ok(p) = env::var("BUF_SYS_CACHE_DIR") {
+    if let Ok(p) = env::var("BUF_RS_CACHE_DIR") {
         let pb = PathBuf::from(p);
         fs::create_dir_all(&pb)?;
         return Ok(pb);
     }
-    let base = dirs::cache_dir().ok_or("could not resolve cache dir (set BUF_SYS_CACHE_DIR)")?;
-    Ok(base.join("buf-sys"))
+    let base = dirs::cache_dir().ok_or("could not resolve cache dir (set BUF_RS_CACHE_DIR)")?;
+    Ok(base.join("buf-tools"))
 }
 
 fn write_docs_rs_stubs(out_dir: &Path, windows: bool) -> Result<(), Box<dyn std::error::Error>> {
@@ -276,21 +279,21 @@ fn print_rustc_env_paths(
         ("buf", "protoc-gen-buf-breaking", "protoc-gen-buf-lint")
     };
     println!(
-        "cargo:rustc-env=BUF_SYS_BUF_BIN={}",
+        "cargo:rustc-env=BUF_RS_BUF_BIN={}",
         bin_dir.join(buf).display()
     );
     println!(
-        "cargo:rustc-env=BUF_SYS_PROTOC_GEN_BUF_BREAKING={}",
+        "cargo:rustc-env=BUF_RS_PROTOC_GEN_BUF_BREAKING={}",
         bin_dir.join(br).display()
     );
     println!(
-        "cargo:rustc-env=BUF_SYS_PROTOC_GEN_BUF_LINT={}",
+        "cargo:rustc-env=BUF_RS_PROTOC_GEN_BUF_LINT={}",
         bin_dir.join(lint).display()
     );
     if let Some(p) = source_root {
-        println!("cargo:rustc-env=BUF_SYS_SOURCE_ROOT={}", p.display());
+        println!("cargo:rustc-env=BUF_RS_SOURCE_ROOT={}", p.display());
     } else {
-        println!("cargo:rustc-env=BUF_SYS_SOURCE_ROOT=");
+        println!("cargo:rustc-env=BUF_RS_SOURCE_ROOT=");
     }
     Ok(())
 }

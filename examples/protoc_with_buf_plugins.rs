@@ -8,8 +8,8 @@ const BUF_BREAKING_OPT: &str =
 
 fn main() -> Result<(), Box<dyn Error>> {
     let protoc = protoc_bin_vendored::protoc_bin_path()?;
-    let lint_plugin = buf_sys::protoc_gen_buf_lint_bin_path();
-    let breaking_plugin = buf_sys::protoc_gen_buf_breaking_bin_path();
+    let lint_plugin = buf_tools::protoc_gen_buf_lint_bin_path();
+    let breaking_plugin = buf_tools::protoc_gen_buf_breaking_bin_path();
 
     let status = Command::new(protoc)
         .arg("--proto_path=proto")
