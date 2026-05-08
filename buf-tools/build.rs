@@ -12,13 +12,15 @@ use semver::Version;
 use build_support::targets::from_rust_triple;
 use build_support::{
     BUF_MINISIGN_PUBLIC_KEY_B64, PREHASHED_MINISIGN_MIN_VERSION, cache_slot, fetch,
-    parse_sha256_list, sha256_hex, source, target_supported, triples, verify_cached_file,
-    verify_minisign_signature, write_executable,
+    lock::SlotLockState, parse_sha256_list, sha256_hex, source, target_supported, triples,
+    verify_cached_file, verify_minisign_signature, write_executable,
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("cargo:rerun-if-env-changed=BUF_RS_CACHE_DIR");
     println!("cargo:rerun-if-env-changed=BUF_RS_INCLUDE_SOURCE");
+    println!("cargo:rerun-if-env-changed=BUF_RS_RELEASE_BASE_URL");
+    println!("cargo:rerun-if-env-changed=BUF_RS_SOURCE_BASE_URL");
     println!("cargo:rerun-if-env-changed=CARGO_NET_OFFLINE");
 
     let out_dir = PathBuf::from(env::var_os("OUT_DIR").expect("OUT_DIR"));
@@ -60,12 +62,33 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     fs::create_dir_all(&slot)?;
 
     let tag = format!("v{core}");
-    let base = format!("https://github.com/bufbuild/buf/releases/download/{tag}/");
+    let release_base = resolve_base_url(
+        "BUF_RS_RELEASE_BASE_URL",
+        &format!("https://github.com/bufbuild/buf/releases/download/{tag}/"),
+    )?;
+    let source_base = resolve_base_url(
+        "BUF_RS_SOURCE_BASE_URL",
+        "https://github.com/bufbuild/buf/archive/refs/tags/",
+    )?;
 
     let offline = env::var_os("CARGO_NET_OFFLINE").is_some();
+    println!(
+        "cargo:warning=buf-tools: selected target {} (asset suffix {})",
+        target_triple, rt.asset_suffix
+    );
+    println!("cargo:warning=buf-tools: cache slot {}", slot.display());
+    println!("cargo:warning=buf-tools: release base {}", release_base);
+    println!("cargo:warning=buf-tools: source base {}", source_base);
 
-    let sha256_url = format!("{base}sha256.txt");
-    let minisig_url = format!("{base}sha256.txt.minisig");
+    let mut warn_fn = |msg: String| println!("cargo:warning={msg}");
+    let (slot_lock, waited_for_peer_writer) =
+        match build_support::lock::acquire_or_wait_for_slot(&slot, &mut warn_fn)? {
+            SlotLockState::Acquired(guard) => (Some(guard), false),
+            SlotLockState::WaitedForOtherWriter => (None, true),
+        };
+
+    let sha256_url = format!("{release_base}sha256.txt");
+    let minisig_url = format!("{release_base}sha256.txt.minisig");
 
     let sha256_txt = fetch::download(&sha256_url)?;
     let minisig = fetch::download(&minisig_url)?;
@@ -92,14 +115,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let bin_dir = out_dir.join("bin");
     fs::create_dir_all(&bin_dir)?;
 
-    let mut warn_fn = |msg: String| println!("cargo:warning={msg}");
-
     for (remote_name, local_name) in triples(&rt) {
         let expected_hex = checksums
             .get(&remote_name)
             .ok_or_else(|| format!("missing {remote_name} in sha256.txt"))?;
         let cache_file = slot.join(&remote_name);
-        let url = format!("{base}{remote_name}");
+        let url = format!("{release_base}{remote_name}");
 
         let bytes = if verify_cached_file(&cache_file, expected_hex)? {
             warn_fn(format!(
@@ -108,6 +129,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             ));
             fs::read(&cache_file)?
         } else {
+            if waited_for_peer_writer {
+                return Err(format!(
+                    "buf-tools: cache artifact {} still missing/invalid at {} after waiting for peer writer",
+                    remote_name,
+                    cache_file.display()
+                )
+                .into());
+            }
             if offline {
                 return Err(format!(
                     "buf-tools: CARGO_NET_OFFLINE set but cache miss for {} — populate {} or clear offline mode",
@@ -144,12 +173,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             &slot,
             &core,
             &tag,
+            &source_base,
             offline,
+            waited_for_peer_writer,
             &mut warn_fn,
         )?);
     }
 
     print_rustc_env_paths(&out_dir, rt.windows, source_root.as_ref())?;
+    drop(slot_lock);
 
     Ok(())
 }
@@ -173,10 +205,12 @@ fn fetch_optional_source(
     slot: &Path,
     core: &str,
     tag: &str,
+    source_base: &str,
     offline: bool,
+    waited_for_peer_writer: bool,
     warn: &mut dyn FnMut(String),
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let url = format!("https://github.com/bufbuild/buf/archive/refs/tags/{tag}.tar.gz");
+    let url = format!("{source_base}{tag}.tar.gz");
     let archive_path = slot.join(format!("buf-upstream-{core}.tar.gz"));
     let extract_parent = slot.join("upstream-src");
 
@@ -191,6 +225,13 @@ fn fetch_optional_source(
     }
 
     if !archive_path.is_file() {
+        if waited_for_peer_writer {
+            return Err(format!(
+                "missing source archive {} after waiting for peer writer",
+                archive_path.display()
+            )
+            .into());
+        }
         if offline {
             return Err(format!("missing source archive {}", archive_path.display()).into());
         }
@@ -231,6 +272,18 @@ fn cache_root_dir() -> Result<PathBuf, Box<dyn std::error::Error>> {
     }
     let base = dirs::cache_dir().ok_or("could not resolve cache dir (set BUF_RS_CACHE_DIR)")?;
     Ok(base.join("buf-tools"))
+}
+
+fn resolve_base_url(name: &str, default: &str) -> Result<String, Box<dyn std::error::Error>> {
+    let mut base = env::var(name).unwrap_or_else(|_| default.to_string());
+    base = base.trim().to_string();
+    if base.is_empty() {
+        return Err(format!("buf-tools: {name} must not be empty").into());
+    }
+    if !base.ends_with('/') {
+        base.push('/');
+    }
+    Ok(base)
 }
 
 fn write_docs_rs_stubs(out_dir: &Path, windows: bool) -> Result<(), Box<dyn std::error::Error>> {

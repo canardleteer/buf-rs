@@ -2,6 +2,7 @@
 #![allow(dead_code)]
 
 pub mod fetch;
+pub mod lock;
 pub mod source;
 pub mod targets;
 pub mod verify;

@@ -41,3 +41,41 @@ sets **`BUF_RS_SOURCE_ROOT`** for this build.
 **minisign**. GitHub-generated **source tarballs are not covered by that
 manifest** — treat them as an **audit / inspection convenience**, not the same
 assurance level as the binary pipeline.
+
+## Mirror/base URL overrides
+
+Use these when your environment cannot reach GitHub directly:
+
+- `BUF_RS_RELEASE_BASE_URL` overrides the release asset base used for
+  `sha256.txt`, `sha256.txt.minisig`, and binary downloads.
+  - Default:
+    `https://github.com/bufbuild/buf/releases/download/v{X.Y.Z}/`
+- `BUF_RS_SOURCE_BASE_URL` overrides the base used for optional source tarball
+  fetches (`BUF_RS_INCLUDE_SOURCE=1`).
+  - Default:
+    `https://github.com/bufbuild/buf/archive/refs/tags/`
+
+Both values should be URL prefixes. A trailing slash is optional.
+
+## Concurrent cache writers
+
+`build.rs` coordinates concurrent jobs with a slot lock file under the resolved
+cache slot (`<cache-root>/<semver-core>/<target>`). If a writer is already
+active, subsequent jobs wait, log what happened, then validate cached artifacts
+after lock release.
+
+If the lock wait succeeds but expected artifacts are still missing or invalid,
+the build fails with an explicit error instead of silently re-fetching.
+
+## CI prewarm then offline build
+
+```bash
+# Online prewarm (fills cache)
+BUF_RS_CACHE_DIR="$PWD/target/buf-rs-cache" \
+  cargo build -p buf-tools
+
+# Offline repeatable build using warmed cache
+BUF_RS_CACHE_DIR="$PWD/target/buf-rs-cache" \
+  CARGO_NET_OFFLINE=true \
+  cargo build -p buf-tools
+```

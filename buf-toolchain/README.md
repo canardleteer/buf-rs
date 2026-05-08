@@ -29,6 +29,16 @@ Cache:
 
 - `BUF_RS_CACHE_DIR`: optional cache root override.
 - default cache root: `$XDG_CACHE_HOME/buf-toolchain` with platform fallback via `dirs::cache_dir()`.
+- `BUF_RS_RELEASE_BASE_URL`: optional release asset base override for
+  `sha256.txt`, `sha256.txt.minisig`, and binary downloads. Default:
+  `https://github.com/bufbuild/buf/releases/download/v{X.Y.Z}/`.
+
+## Concurrent cache writers
+
+`build.rs` uses a lock file per cache slot (`<cache-root>/<semver-core>/<target>`)
+to avoid two jobs writing the same artifact concurrently. If another process
+already holds the lock, the current process waits and logs lock activity, then
+re-validates expected cached artifacts after lock release.
 
 ## Install
 
@@ -40,4 +50,17 @@ To place the executables in a custom path:
 
 ```bash
 BUF_RS_TOOLCHAIN_BIN_DIR="$HOME/.local/bin" cargo install buf-toolchain
+```
+
+## CI prewarm then offline install/build
+
+```bash
+# Online prewarm
+BUF_RS_CACHE_DIR="$PWD/target/buf-rs-cache" \
+  cargo build -p buf-toolchain
+
+# Offline rebuild with warm cache
+BUF_RS_CACHE_DIR="$PWD/target/buf-rs-cache" \
+  CARGO_NET_OFFLINE=true \
+  cargo build -p buf-toolchain
 ```
