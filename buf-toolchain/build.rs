@@ -4,7 +4,7 @@ use std::fs;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::thread::sleep;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use minisign_verify::{PublicKey, Signature};
 use semver::Version;
@@ -15,6 +15,25 @@ const BUF_MINISIGN_PUBLIC_KEY_B64: &str =
 const PREHASHED_MINISIGN_MIN_VERSION: &str = "1.12.0";
 const MAX_ATTEMPTS: usize = 5;
 const CHUNK: usize = 64 * 1024;
+const LOCK_FILENAME: &str = ".cache-slot.lock";
+const LOCK_WAIT_STEP: Duration = Duration::from_millis(250);
+const LOCK_WAIT_TIMEOUT: Duration = Duration::from_secs(120);
+const LOCK_STALE_AFTER: Duration = Duration::from_secs(600);
+
+enum SlotLockState {
+    Acquired(SlotLockGuard),
+    WaitedForOtherWriter,
+}
+
+struct SlotLockGuard {
+    path: PathBuf,
+}
+
+impl Drop for SlotLockGuard {
+    fn drop(&mut self) {
+        fs::remove_file(&self.path).ok();
+    }
+}
 
 #[derive(Clone, Copy, Debug)]
 struct ReleaseTarget {
@@ -27,6 +46,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("cargo:rerun-if-env-changed=BUF_RS_TOOLCHAIN_HOME");
     println!("cargo:rerun-if-env-changed=BUF_RS_TOOLCHAIN_BIN_DIR");
     println!("cargo:rerun-if-env-changed=BUF_RS_CACHE_DIR");
+    println!("cargo:rerun-if-env-changed=BUF_RS_RELEASE_BASE_URL");
     println!("cargo:rerun-if-env-changed=CARGO_HOME");
     println!("cargo:rerun-if-env-changed=CARGO_NET_OFFLINE");
 
@@ -50,13 +70,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     fs::create_dir_all(&install_bin_dir)?;
     let cache_slot = resolve_cache_slot(&core, &target_triple)?;
     fs::create_dir_all(&cache_slot)?;
+    let release_base = resolve_base_url(
+        "BUF_RS_RELEASE_BASE_URL",
+        &format!("https://github.com/bufbuild/buf/releases/download/v{core}/"),
+    )?;
+    println!(
+        "cargo:warning=buf-toolchain: selected target {} (asset suffix {})",
+        target_triple, rt.asset_suffix
+    );
+    println!(
+        "cargo:warning=buf-toolchain: cache slot {}",
+        cache_slot.display()
+    );
+    println!("cargo:warning=buf-toolchain: release base {}", release_base);
+    let (slot_lock, waited_for_peer_writer) = match acquire_or_wait_for_slot(&cache_slot)? {
+        SlotLockState::Acquired(guard) => (Some(guard), false),
+        SlotLockState::WaitedForOtherWriter => (None, true),
+    };
 
     let tag = format!("v{core}");
-    let base = format!("https://github.com/bufbuild/buf/releases/download/{tag}/");
     let offline = env::var_os("CARGO_NET_OFFLINE").is_some();
 
-    let sha256_txt = download(&format!("{base}sha256.txt"))?;
-    let minisig = download(&format!("{base}sha256.txt.minisig"))?;
+    let sha256_txt = download(&format!("{release_base}sha256.txt"))?;
+    let minisig = download(&format!("{release_base}sha256.txt.minisig"))?;
     let minisig_text = std::str::from_utf8(&minisig)?;
     let prehashed_min = Version::parse(PREHASHED_MINISIGN_MIN_VERSION)?;
     let allow_legacy = core_ver < prehashed_min;
@@ -97,6 +133,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             );
             fs::read(&cache_file)?
         } else {
+            if waited_for_peer_writer {
+                return Err(format!(
+                    "buf-toolchain: cache artifact {} still missing/invalid at {} after waiting for peer writer",
+                    remote_name,
+                    cache_file.display()
+                )
+                .into());
+            }
             if offline {
                 return Err(format!(
                     "buf-toolchain: CARGO_NET_OFFLINE set but cache miss for {} at {}",
@@ -105,7 +149,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 )
                 .into());
             }
-            let url = format!("{base}{remote_name}");
+            let url = format!("{release_base}{remote_name}");
             let b = download_streaming_with_progress(&url, &remote_name)?;
             if sha256_hex(&b) != *expected_hex {
                 return Err(format!(
@@ -142,6 +186,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             skipped.join(", ")
         );
     }
+    drop(slot_lock);
 
     Ok(())
 }
@@ -247,6 +292,122 @@ fn parse_sha256_list(data: &[u8]) -> Result<HashMap<String, String>, String> {
 
 fn sha256_hex(bytes: &[u8]) -> String {
     hex::encode(Sha256::digest(bytes))
+}
+
+fn resolve_base_url(name: &str, default: &str) -> Result<String, String> {
+    let mut base = env::var(name).unwrap_or_else(|_| default.to_string());
+    base = base.trim().to_string();
+    if base.is_empty() {
+        return Err(format!("buf-toolchain: {name} must not be empty"));
+    }
+    if !base.ends_with('/') {
+        base.push('/');
+    }
+    Ok(base)
+}
+
+fn acquire_or_wait_for_slot(slot: &Path) -> Result<SlotLockState, String> {
+    let lock_path = slot.join(LOCK_FILENAME);
+    match try_acquire_lock(&lock_path)? {
+        Some(guard) => Ok(SlotLockState::Acquired(guard)),
+        None => {
+            println!(
+                "cargo:warning=buf-toolchain: cache slot lock exists at {}. Waiting for peer writer.",
+                lock_path.display()
+            );
+            wait_for_unlock(&lock_path)?;
+            Ok(SlotLockState::WaitedForOtherWriter)
+        }
+    }
+}
+
+fn try_acquire_lock(lock_path: &Path) -> Result<Option<SlotLockGuard>, String> {
+    let mut lock = match fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(lock_path)
+    {
+        Ok(file) => file,
+        Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => return Ok(None),
+        Err(err) => return Err(format!("create lock {}: {err}", lock_path.display())),
+    };
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|e| format!("system clock before unix epoch: {e}"))?
+        .as_secs();
+    writeln!(lock, "pid={} unix_ts={}", std::process::id(), now)
+        .map_err(|e| format!("write lock {}: {e}", lock_path.display()))?;
+    Ok(Some(SlotLockGuard {
+        path: lock_path.to_path_buf(),
+    }))
+}
+
+fn wait_for_unlock(lock_path: &Path) -> Result<(), String> {
+    let mut waited = Duration::ZERO;
+    while lock_path.exists() {
+        if is_lock_stale(lock_path)? {
+            println!(
+                "cargo:warning=buf-toolchain: cache slot lock looks stale at {}. Removing stale lock.",
+                lock_path.display()
+            );
+            fs::remove_file(lock_path)
+                .map_err(|e| format!("remove stale lock {}: {e}", lock_path.display()))?;
+            return Ok(());
+        }
+        if waited >= LOCK_WAIT_TIMEOUT {
+            return Err(format!(
+                "buf-toolchain: timed out waiting for cache slot lock {} after {}s",
+                lock_path.display(),
+                LOCK_WAIT_TIMEOUT.as_secs()
+            ));
+        }
+        sleep(LOCK_WAIT_STEP);
+        waited += LOCK_WAIT_STEP;
+    }
+    println!(
+        "cargo:warning=buf-toolchain: peer writer released cache slot lock {} after {}ms",
+        lock_path.display(),
+        waited.as_millis()
+    );
+    Ok(())
+}
+
+fn is_lock_stale(lock_path: &Path) -> Result<bool, String> {
+    if let Some(owner_pid) = read_lock_pid(lock_path)?
+        && !pid_is_alive(owner_pid)
+    {
+        return Ok(true);
+    }
+    let modified = fs::metadata(lock_path)
+        .map_err(|e| format!("stat {}: {e}", lock_path.display()))?
+        .modified()
+        .map_err(|e| format!("mtime {}: {e}", lock_path.display()))?;
+    let age = SystemTime::now()
+        .duration_since(modified)
+        .map_err(|e| format!("mtime in future for {}: {e}", lock_path.display()))?;
+    Ok(age >= LOCK_STALE_AFTER)
+}
+
+fn read_lock_pid(lock_path: &Path) -> Result<Option<u32>, String> {
+    let content =
+        fs::read_to_string(lock_path).map_err(|e| format!("read {}: {e}", lock_path.display()))?;
+    let Some(pid_part) = content
+        .split_whitespace()
+        .find(|part| part.starts_with("pid="))
+    else {
+        return Ok(None);
+    };
+    Ok(pid_part["pid=".len()..].parse::<u32>().ok())
+}
+
+#[cfg(unix)]
+fn pid_is_alive(pid: u32) -> bool {
+    PathBuf::from("/proc").join(pid.to_string()).exists()
+}
+
+#[cfg(not(unix))]
+fn pid_is_alive(_pid: u32) -> bool {
+    true
 }
 
 fn download(url: &str) -> Result<Vec<u8>, String> {

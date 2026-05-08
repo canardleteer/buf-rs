@@ -1,6 +1,6 @@
-# buf-sys
+# buf-rs
 
-[![crates.io](https://img.shields.io/crates/v/buf-sys.svg)](https://crates.io/crates/buf-sys)
+[![crates.io](https://img.shields.io/crates/v/buf-tools.svg)](https://crates.io/crates/buf-tools)
 
 > [!WARNING]
 > Clanker generated code, running an auto-release pipeline on auto-pilot from an
@@ -10,28 +10,29 @@
 
 Rust workspace distributing the official [`buf`](https://github.com/bufbuild/buf)
 CLI plus `protoc-gen-buf-breaking` and `protoc-gen-buf-lint` via two crates:
-**`buf-sys`** for Rust dependency integration and **`buf-toolchain`** for
+**`buf-tools`** for Rust dependency integration and **`buf-toolchain`** for
 managed install directories. Binaries are **pinned** to upstream Buf releases
 (**minisign** + **`sha256.txt`**) and downloaded on the consumer machine.
 
-Repository home: **[github.com/canardleteer/buf-sys](https://github.com/canardleteer/buf-sys)**
+Repository home: **[github.com/canardleteer/buf-rs](https://github.com/canardleteer/buf-rs)**
 (rename may lag the crate; URLs in **`Cargo.toml`** should match the canonical repo).
 
 ## Usage
 
-Use one of these two installation patterns, depending on whether you are wiring Buf into Rust code or installing a managed toolchain directory.
+Use one of these two installation patterns, depending on whether you are wiring
+Buf into Rust code or installing a managed toolchain directory.
 
-### `buf-sys` (Cargo.toml dependency)
+### `buf-tools` (Cargo.toml dependency)
 
 ```toml
 [dependencies]
-buf-sys = "1.69.0"
+buf-tools = "1.69.0"
 ```
 
 ```rust
 use std::process::Command;
 
-let buf = buf_sys::buf_bin_path();
+let buf = buf_tools::buf_bin_path();
 let _ = Command::new(buf).arg("--version").status();
 ```
 
@@ -41,17 +42,39 @@ let _ = Command::new(buf).arg("--version").status();
 cargo install buf-toolchain
 ```
 
-The `buf-toolchain` build step downloads and verifies official release artifacts, then installs available binaries into a managed directory:
+The `buf-toolchain` build step downloads and verifies official release
+artifacts, then installs available binaries into a managed directory:
 
-- `BUF_CARGO_TOOLCHAIN_BIN_DIR` (optional) installs directly into this flat directory.
-- Otherwise install path defaults to `$CARGO_HOME/buf-toolchain/<version-core>/<target>/bin` (or `~/.cargo/buf-toolchain/...` when `CARGO_HOME` is unset).
-- `BUF_SYS_CACHE_DIR` (optional) overrides the download cache root.
+- `BUF_RS_TOOLCHAIN_BIN_DIR` (optional) installs directly into this flat directory.
+- Otherwise install path defaults to
+  `$CARGO_HOME/buf-toolchain/<version-core>/<target>/bin` (or
+  `~/.cargo/buf-toolchain/...` when `CARGO_HOME` is unset).
+- `BUF_RS_CACHE_DIR` (optional) overrides the download cache root.
+- `BUF_RS_RELEASE_BASE_URL` (optional) overrides the release asset base URL
+  for both crates.
+- `BUF_RS_SOURCE_BASE_URL` (optional, `buf-tools` only) overrides optional
+  upstream source tarball base URL.
 
 See [`buf-toolchain/README.md`](buf-toolchain/README.md) for full env-var precedence and examples.
 
+### CI prewarm then offline builds
+
+Use a shared cache directory in CI to prewarm online, then run offline:
+
+```bash
+BUF_RS_CACHE_DIR="$PWD/target/buf-rs-cache" \
+  cargo build -p buf-tools -p buf-toolchain
+BUF_RS_CACHE_DIR="$PWD/target/buf-rs-cache" CARGO_NET_OFFLINE=true \
+  cargo build -p buf-tools -p buf-toolchain
+```
+
+For crate-specific variants (including source bundle behavior), see
+[`buf-tools/README.md`](buf-tools/README.md) and
+[`buf-toolchain/README.md`](buf-toolchain/README.md).
+
 ## Supported targets
 
-`buf-sys`'s `build.rs` resolves the compilation target to one of the official
+`buf-tools`'s `build.rs` resolves the compilation target to one of the official
 `bufbuild/buf` release asset suffixes and downloads three binaries (`buf`,
 `protoc-gen-buf-lint`, `protoc-gen-buf-breaking`). If the crate's pinned Buf
 version predates a target's introduction, the build fails fast — *before* any
@@ -75,8 +98,8 @@ HTTP fetch — with a clear error.
 | `OpenBSD-arm64`   | `aarch64-unknown-openbsd`                                                  | 1.67.0          |
 
 Tooling can read the same data programmatically from
-`cargo metadata --format-version 1 -p buf-sys` (look under
-`packages[].metadata."buf-sys".targets`).
+`cargo metadata --format-version 1 -p buf-tools` (look under
+`packages[].metadata."buf-tools".targets`).
 
 ### Examples
 
@@ -87,47 +110,47 @@ Run these from the repository root (the examples set their working directory to
 [`examples/proto/`](examples/proto/).
 
 ```bash
-cargo run -p buf-sys-examples --example buf_lint
+cargo run -p buf-tools-examples --example buf_lint
 ```
 
 First build downloads Buf release binaries (HTTPS to GitHub). Optionally pin the
 cache under the workspace:
 
 ```bash
-BUF_SYS_CACHE_DIR="$PWD/target/buf-sys-cache" \
-  cargo run -p buf-sys-examples --example buf_lint
+BUF_RS_CACHE_DIR="$PWD/target/buf-rs-cache" \
+  cargo run -p buf-tools-examples --example buf_lint
 ```
 
 **[`protoc_with_buf_plugins`](examples/protoc_with_buf_plugins.rs)** — runs
 `protoc` from **`protoc-bin-vendored`** (see [`examples/Cargo.toml`](examples/Cargo.toml))
 and wires **`protoc-gen-buf-lint`** and **`protoc-gen-buf-breaking`** from
-**`buf-sys`**. It checks
+**`buf-tools`**. It checks
 [`weather.proto`](examples/proto/acme/weather/v1/weather.proto) with lint and
 breaking detection against a **Buf binary image** baseline.
 
 Generate that baseline once under [`examples/proto/`](examples/proto/) (the file
-is **gitignored**). Build **`buf-sys`** first so the official `buf` CLI is
+is **gitignored**). Build **`buf-tools`** first so the official `buf` CLI is
 available under `target/`:
 
 ```bash
-cargo build -p buf-sys
-BUF=$(find target -type f -path '*/build/buf-sys-*/out/bin/buf' | head -n 1)
+cargo build -p buf-tools
+BUF=$(find target -type f -path '*/build/buf-tools-*/out/bin/buf' | head -n 1)
 ( cd examples/proto && "$BUF" build -o breaking_against.binpb . )
 ```
 
 Then run the example:
 
 ```bash
-cargo run -p buf-sys-examples --example protoc_with_buf_plugins
+cargo run -p buf-tools-examples --example protoc_with_buf_plugins
 ```
 
-Use the same optional **`BUF_SYS_CACHE_DIR`** as above if you want Buf artifacts
+Use the same optional **`BUF_RS_CACHE_DIR`** as above if you want Buf artifacts
 under the workspace instead of the default cache directory.
 
 ## Tests
 
 ```bash
-BUF_SYS_CACHE_DIR="$PWD/target/buf-sys-cache"
+BUF_RS_CACHE_DIR="$PWD/target/buf-rs-cache"
 BUF_EXPECT_VERSION=1.69.0 cargo test --workspace --locked
 ```
 
