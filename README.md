@@ -32,6 +32,35 @@ let buf = buf_sys::buf_bin_path();
 let _ = Command::new(buf).arg("--version").status();
 ```
 
+## Supported targets
+
+`buf-sys`'s `build.rs` resolves the compilation target to one of the official
+`bufbuild/buf` release asset suffixes and downloads three binaries (`buf`,
+`protoc-gen-buf-lint`, `protoc-gen-buf-breaking`). If the crate's pinned Buf
+version predates a target's introduction, the build fails fast — *before* any
+HTTP fetch — with a clear error.
+
+| Asset suffix      | Rust target triples                                                        | Min Buf version |
+| ----------------- | -------------------------------------------------------------------------- | --------------- |
+| `Linux-x86_64`    | `x86_64-unknown-linux-{gnu,musl}`                                          | 1.0.0           |
+| `Linux-aarch64`   | `aarch64-unknown-linux-{gnu,musl}`                                       | 1.0.0           |
+| `Linux-armv7`     | `arm-unknown-linux-{gnueabihf,musleabihf}`                               | 1.47.0          |
+| `Linux-ppc64le`   | `powerpc64le-unknown-linux-gnu`                                          | 1.54.0          |
+| `Linux-riscv64`   | `riscv64gc-unknown-linux-gnu`, `riscv64-unknown-linux-gnu`               | 1.54.0          |
+| `Linux-s390x`     | `s390x-unknown-linux-gnu`                                                  | 1.56.0          |
+| `Darwin-x86_64`   | `x86_64-apple-darwin`                                                      | 1.0.0           |
+| `Darwin-arm64`    | `aarch64-apple-darwin`                                                     | 1.0.0           |
+| `Windows-x86_64`  | `x86_64-pc-windows-{gnu,msvc}`                                             | 1.0.0           |
+| `Windows-arm64`   | `aarch64-pc-windows-{gnu,msvc}`                                            | 1.0.0           |
+| `FreeBSD-x86_64`  | `x86_64-unknown-freebsd`                                                   | 1.67.0          |
+| `FreeBSD-arm64`   | `aarch64-unknown-freebsd`                                                  | 1.67.0          |
+| `OpenBSD-x86_64`  | `x86_64-unknown-openbsd`                                                   | 1.67.0          |
+| `OpenBSD-arm64`   | `aarch64-unknown-openbsd`                                                  | 1.67.0          |
+
+Tooling can read the same data programmatically from
+`cargo metadata --format-version 1 -p buf-sys` (look under
+`packages[].metadata."buf-sys".targets`).
+
 ### Examples
 
 Run these from the repository root (the examples set their working directory to

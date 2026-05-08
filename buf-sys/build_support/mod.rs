@@ -13,7 +13,8 @@ use std::path::{Path, PathBuf};
 
 pub use targets::{ReleaseTarget, triples};
 pub use verify::{
-    BUF_MINISIGN_PUBLIC_KEY_B64, parse_sha256_list, sha256_hex, verify_minisign_signature,
+    BUF_MINISIGN_PUBLIC_KEY_B64, PREHASHED_MINISIGN_MIN_VERSION, parse_sha256_list, sha256_hex,
+    verify_minisign_signature,
 };
 
 /// Cache layout: `<cache_root>/<semver-core>/<rust-target>/` where `cache_root` is `BUF_SYS_CACHE_DIR` or `~/.cache/buf-sys`.

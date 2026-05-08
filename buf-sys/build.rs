@@ -11,8 +11,9 @@ use semver::Version;
 
 use build_support::targets::from_rust_triple;
 use build_support::{
-    BUF_MINISIGN_PUBLIC_KEY_B64, cache_slot, fetch, parse_sha256_list, sha256_hex, source,
-    target_supported, triples, verify_cached_file, verify_minisign_signature, write_executable,
+    BUF_MINISIGN_PUBLIC_KEY_B64, PREHASHED_MINISIGN_MIN_VERSION, cache_slot, fetch,
+    parse_sha256_list, sha256_hex, source, target_supported, triples, verify_cached_file,
+    verify_minisign_signature, write_executable,
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -32,6 +33,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let ver = Version::parse(&pkg_version)?;
     let core = format!("{}.{}.{}", ver.major, ver.minor, ver.patch);
+    let core_ver = Version::parse(&core)
+        .map_err(|e| format!("buf-sys: invalid semver core in CARGO_PKG_VERSION: {e}"))?;
 
     let rt =
         from_rust_triple(&target_triple).ok_or_else(|| {
@@ -39,6 +42,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 "buf-sys: unsupported compilation TARGET `{target_triple}`. See crate README for supported triples."
             )
         })?;
+
+    let min = Version::parse(rt.min_version)
+        .map_err(|e| format!("buf-sys: bad min_version for {}: {e}", rt.asset_suffix))?;
+    if core_ver < min {
+        return Err(format!(
+            "buf-sys: target `{}` requires Buf >= {} but crate is pinned to {} \
+             (Buf {} did not ship binaries for this platform). \
+             Either pin a newer crate version or compile for a different target.",
+            rt.asset_suffix, min, ver, core
+        )
+        .into());
+    }
 
     let cache_root = cache_root_dir()?;
     let slot = cache_slot(&cache_root, &core, &target_triple);
@@ -55,7 +70,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let sha256_txt = fetch::download(&sha256_url)?;
     let minisig = fetch::download(&minisig_url)?;
     let minisig_text = std::str::from_utf8(&minisig)?;
-    verify_minisign_signature(&sha256_txt, minisig_text, BUF_MINISIGN_PUBLIC_KEY_B64)?;
+    let prehashed_min = Version::parse(PREHASHED_MINISIGN_MIN_VERSION)
+        .map_err(|e| format!("buf-sys: invalid PREHASHED_MINISIGN_MIN_VERSION: {e}"))?;
+    let allow_legacy = core_ver < prehashed_min;
+    verify_minisign_signature(
+        &sha256_txt,
+        minisig_text,
+        BUF_MINISIGN_PUBLIC_KEY_B64,
+        allow_legacy,
+    )?;
     let checksums = parse_sha256_list(&sha256_txt)?;
 
     if !target_supported(&checksums, &rt) {
