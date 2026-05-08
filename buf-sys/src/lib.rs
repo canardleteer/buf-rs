@@ -148,3 +148,14 @@ mod tests {
         );
     }
 }
+
+// Compile `build_support` unit tests with the library test harness (not part of the public API).
+#[cfg(all(test, not(docsrs)))]
+#[allow(dead_code)] // `targets` / `verify` are shared with `build.rs`; only a subset is used here.
+#[path = "../build_support/targets.rs"]
+mod release_targets_table;
+
+#[cfg(all(test, not(docsrs)))]
+#[allow(dead_code)]
+#[path = "../build_support/verify.rs"]
+mod release_verify_fixtures;
