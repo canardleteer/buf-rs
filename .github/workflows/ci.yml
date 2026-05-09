@@ -1,0 +1,79 @@
+# -----------------------------------------------------------------------------
+# Workspace CI: rustfmt, clippy, tests, and buf-tools examples on multiple hosts.
+# Rustfmt/clippy/test/example orchestration lives in .github/ci-scripts/run-examples.sh
+# so this file stays mostly declarative.
+# -----------------------------------------------------------------------------
+name: CI
+
+# Run on pushes to main and on pull requests targeting main (merge-request flow).
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+# Cancel older runs on the same branch when new commits arrive.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    # Human-readable job name per matrix row (shown in GitHub UI).
+    name: ci (${{ matrix.platform.name }})
+
+    runs-on: ${{ matrix.platform.runs_on }}
+
+    # Use bash everywhere (including windows-latest) so .github/ci-scripts/*.sh runs identically.
+    defaults:
+      run:
+        shell: bash
+
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          # Linux x86_64 (amd64), Ubuntu latest image.
+          - name: linux-amd64
+            runs_on: ubuntu-latest
+
+          # Linux ARM64 — hosted runner label per GitHub docs.
+          - name: linux-arm64
+            runs_on: ubuntu-24.04-arm
+
+          # Optional: enable when Intel macOS capacity is acceptable.
+          # - name: macos-amd64
+          #   runs_on: macos-13
+
+          # Apple Silicon macOS.
+          - name: macos-arm64
+            runs_on: macos-14
+
+          # Windows x86_64 (Git Bash provides bash for our scripts).
+          - name: windows-amd64
+            runs_on: windows-latest
+
+    env:
+      # Shared Buf download cache path for build.rs (matches README CI prewarm pattern).
+      BUF_RS_CACHE_DIR: ${{ github.workspace }}/target/buf-rs-cache
+
+    steps:
+      # Fetch full git history (default depth is enough for this repo).
+      - name: Checkout repository
+        uses: actions/checkout@v6.0.2
+
+      # Install stable Rust with formatting and lint components for this job only.
+      - name: Install Rust toolchain (stable, rustfmt, clippy)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+
+      # Run fmt check, clippy, workspace tests, then buf_lint + protoc_with_buf_plugins.
+      - name: Run workspace CI script
+        run: bash .github/ci-scripts/run-examples.sh
