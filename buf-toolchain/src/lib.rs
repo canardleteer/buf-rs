@@ -10,10 +10,10 @@
 
 #![forbid(unsafe_code)]
 
-#[path = "../../buf-tools/build_support/targets.rs"]
+#[path = "../build_support/targets.rs"]
 pub mod targets;
 
-#[path = "../../buf-tools/build_support/verify.rs"]
+#[path = "../build_support/verify.rs"]
 pub mod verify;
 
 pub mod upstream;

@@ -1,6 +1,7 @@
 # buf-rs
 
-[![crates.io](https://img.shields.io/crates/v/buf-tools.svg)](https://crates.io/crates/buf-tools)
+[![crates.io buf-tools](https://img.shields.io/crates/v/buf-tools.svg)](https://crates.io/crates/buf-tools)
+[![crates.io buf-toolchain](https://img.shields.io/crates/v/buf-toolchain.svg)](https://crates.io/crates/buf-toolchain)
 
 > [!WARNING]
 > Clanker generated code, running an auto-release pipeline on auto-pilot from an
@@ -67,9 +68,6 @@ install`**:
 [build-dependencies]
 buf-toolchain = "1.69.0"
 ```
-
-Upstream asset names such as `buf-Linux-x86_64` exist **only under the download
-cache**.
 
 - `BUF_RS_TOOLCHAIN_BIN_DIR` (optional) — install into this directory instead of
   **`$CARGO_HOME/bin`**.
@@ -188,9 +186,11 @@ BUF_EXPECT_VERSION=1.69.0 cargo test --workspace --locked
 
 ## License
 
-This crate's source is licensed under the **MIT** license — see [`LICENSE`](LICENSE).
+Rust sources in this repository are licensed under the **MIT** license — see
+[`LICENSE`](LICENSE).
 
-The crate does **not** redistribute Buf. The official [`buf`](https://github.com/bufbuild/buf)
-CLI and `protoc-gen-buf-*` plugins are downloaded at build time from upstream
-`bufbuild/buf` GitHub releases (Apache-2.0) by the consumer's machine and
-verified via `sha256.txt` + minisign. See [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+The workspace **does not** vendor or redistribute Buf binaries inside crates.io
+packages. The official [`buf`](https://github.com/bufbuild/buf) CLI and
+`protoc-gen-buf-*` plugins are downloaded at build time from upstream
+`bufbuild/buf` GitHub releases (Apache-2.0) on the consumer machine and verified
+via `sha256.txt` + minisign. See [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).

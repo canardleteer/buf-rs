@@ -81,14 +81,18 @@ Before merging risky changes:
   to apply).
 - **`cargo clippy --workspace --locked --all-targets`** — static analysis gate
   (narrow with `-p` when iterating on one crate).
-- **`buf-toolchain` + `buf-tools/build_support`** — `buf-toolchain/build.rs`
-  includes [`buf-tools/build_support/mod.rs`](buf-tools/build_support/mod.rs)
-  via `#[path = "../buf-tools/build_support/mod.rs"]`. Changes to verify, lock,
-  `write_executable`, `targets`, or `fetch` in **`buf-tools/build_support/`**
-  affect **both** crates; run workspace tests when touching that tree.
+- **`buf-toolchain` + `buf-tools/build_support`** — **`buf-toolchain/build_support`**
+  is a **symlink** to **[`buf-tools/build_support`](buf-tools/build_support)** so
+  **`cargo package -p buf-toolchain`** packs the shared **`*.rs`** sources.
+  **`build.rs`** and **`src/lib.rs`** include them via **`#[path]`** under
+  **`build_support/`**. Changes to verify, lock, `write_executable`, `targets`,
+  or `fetch` in **`buf-tools/build_support/`** affect **both** crates; run
+  workspace tests when touching that tree.
 - **`buf-toolchain` layout contract** — workspace **`cargo test`** does not
   prove nested-install behavior in isolation. Run:
   **`cargo test -p buf-toolchain --locked --test managed_bin_layout -- --ignored`**
+  when changing installer logic (requires network unless the nested build’s temp
+  cache is warm).
 - **`buf-toolchain` `[[bin]]`** — Cargo only **`cargo install`**s crates that
   expose a binary (or installable example). The installed binary is
   **`validate-cargo-buf-toolchain`** (package name remains **`buf-toolchain`**);
@@ -97,8 +101,6 @@ Before merging risky changes:
   crates.io for **`buf-toolchain`** when an upgrade exists
   (**`BUF_RS_VALIDATE_OFFLINE=1`** skips network). **`buf`** /
   **`protoc-gen-buf-*`** are installed by **`build.rs`**, not by that helper.
-  when changing installer logic (requires network unless the nested build’s temp
-  cache is warm).
 
 ## Examples
 

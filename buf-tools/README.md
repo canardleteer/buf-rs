@@ -1,6 +1,9 @@
 # buf-tools
 
-Rust paths to the official **[Buf](https://github.com/bufbuild/buf)** CLI and bundled `protoc-gen-buf-*` plugins.
+Rust paths to the official **[Buf](https://github.com/bufbuild/buf)** CLI and
+bundled `protoc-gen-buf-*` plugins. This file is the **buf-tools** package
+README on [crates.io](https://crates.io/crates/buf-tools) and in the repo
+[tree](https://github.com/canardleteer/buf-rs/tree/main/buf-tools).
 
 ## What this crate does (read this first)
 
@@ -58,6 +61,7 @@ BUF_RS_LAYOUT_MODE=cache-link cargo build -p buf-tools
 layout_mode = "cache-link"
 build_log = "warn"
 cache_dir = "target/buf-rs-cache"
+# Use the same Buf vX.Y.Z as this crate’s semver core (e.g. v1.69.0 for 1.69.0):
 release_base_url = "https://github.com/bufbuild/buf/releases/download/v1.69.0/"
 source_base_url = "https://github.com/bufbuild/buf/archive/refs/tags/"
 ```
@@ -73,7 +77,8 @@ build_log = "verbose"
 Supported keys:
 
 - `layout_mode`: `cache`, `cache-link`, `cache-verified-link`, or `target`
-- `build_log`: `warn`, `verbose`, `silent` (`true` aliases `warn`; `false` aliases `silent`)
+- `build_log`: `warn`, `verbose`, `silent` (`true` aliases `warn`; `false`
+  aliases `silent`)
 - `cache_dir`: cache root directory path
 - `release_base_url`: release asset base URL
 - `source_base_url`: source archive base URL

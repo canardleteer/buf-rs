@@ -1,14 +1,20 @@
 # buf-toolchain
 
-Install official [Buf](https://github.com/bufbuild/buf) release executables
-using Cargo-managed packaging and version pinning.
+Install official [Buf](https://github.com/bufbuild/buf) release executables using
+Cargo-managed packaging and version pinning. This file is the **buf-toolchain**
+package README on [crates.io](https://crates.io/crates/buf-toolchain) and in the
+repo [tree](https://github.com/canardleteer/buf-rs/tree/main/buf-toolchain).
+
+Shared helpers live in the workspace
+([`build_support` source tree](https://github.com/canardleteer/buf-rs/tree/main/buf-tools/build_support));
+**`buf-tools`** documents the same verify/cache/target behaviour.
 
 ## What this crate does
 
 When this crate is built (including **`cargo install buf-toolchain`** or as
-**`[build-dependencies]`**), its `build.rs` compiles shared helpers from
-**[`buf-tools/build_support`](../buf-tools/build_support/mod.rs)** (same
-verify/write/lock/target code as `buf-tools`) and then:
+**`[build-dependencies]`**), its `build.rs` compiles those helpers (same
+verify/write/lock/target code as [`buf-tools`](https://crates.io/crates/buf-tools))
+and then:
 
 1. Resolves the current compilation target.
 2. Downloads Buf release artifacts for the crate semver core from `bufbuild/buf`
@@ -31,11 +37,12 @@ Per-target requirements match **`buf-tools`**: after downloading
 your asset suffix (`buf-…`, both `protoc-gen-buf-*-…`) appear in the manifest.
 If any are missing (or your Rust triple maps to a platform **Buf did not ship
 for that release**), the build fails **before** fetching blobs — same
-**`target_supported`** guard as [`buf-tools/build.rs`](../buf-tools/build.rs).
+**`target_supported`** guard as
+[`buf-tools` `build.rs`](https://github.com/canardleteer/buf-rs/blob/main/buf-tools/build.rs).
 Older Buf releases list **fewer platforms** than today’s matrix; this crate pins
 a minimum Buf **core** per target in
-[`build_support/targets.rs`](../buf-tools/build_support/targets.rs) so you do
-not select a release predating assets for that OS/arch.
+[`targets.rs`](https://github.com/canardleteer/buf-rs/blob/main/buf-tools/build_support/targets.rs)
+so you do not select a release predating assets for that OS/arch.
 
 ## Directory and environment variables
 
@@ -72,10 +79,13 @@ cargo install buf-toolchain
 validate-cargo-buf-toolchain
 ```
 
-The second command optionally confirms **`buf`** reports the expected version
-and both **`protoc-gen-buf-*`** files are present under the same canonical bin
-directory rules as install (`BUF_RS_TOOLCHAIN_BIN_DIR` or
-**`$CARGO_HOME/bin`**).
+**`validate-cargo-buf-toolchain`** (installed because **`cargo install`** must
+ship a binary) re-checks local **`buf`** / plugins against the official GitHub
+release for your installed Buf core (**minisign** + **`sha256.txt`**), compares
+**`releases/latest`**, and probes crates.io for a matching **`buf-toolchain`**
+when a newer Buf exists. Set **`BUF_RS_VALIDATE_OFFLINE=1`** to skip network.
+See the repo **[README](https://github.com/canardleteer/buf-rs#readme)** for the
+full env-var list.
 
 Custom flat directory:
 
@@ -119,7 +129,14 @@ cargo test -p buf-toolchain --locked --test managed_bin_layout -- --ignored
 
 ## crates.io note
 
-`build.rs` includes **`../buf-tools/build_support/**/*.rs`** via `#[path]`.
-Before publishing **`buf-toolchain`**, run **`cargo package -p buf-toolchain`**
-/ **`--dry-run`** and confirm the `.crate` contains or resolves that tree
-(workspace layout).
+Shared logic lives in the
+**[`buf-tools` `build_support` tree](https://github.com/canardleteer/buf-rs/tree/main/buf-tools/build_support)**.
+In this checkout, **`buf-toolchain/build_support`** is a **symlink** to that
+directory so
+**[`include`](https://github.com/canardleteer/buf-rs/blob/main/buf-toolchain/Cargo.toml)**
+packs the **`*.rs`** files into the **`.crate`**. **`build.rs`** and **`src/`**
+wire modules via **`#[path]`** under **`build_support/`**.
+
+Before **`cargo publish`**, run **`cargo package -p buf-toolchain`** (it verifies
+the tarball by building in isolation). On Windows, enable symlink checkouts if
+the symlink is missing (**`git config core.symlinks true`**) or recreate it.
