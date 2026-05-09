@@ -81,7 +81,8 @@ mod tests {
         ] {
             let path = dir.join(name);
             if let Ok(s) = std::fs::read_to_string(&path) {
-                return Some(s);
+                // Git may check out text fixtures with CRLF on Windows; signatures are over LF bytes.
+                return Some(s.replace("\r\n", "\n"));
             }
         }
         None

@@ -145,7 +145,8 @@ active, subsequent jobs wait, log what happened, then validate cached artifacts
 after lock release.
 
 If the lock wait succeeds but expected artifacts are still missing or invalid,
-the build fails with an explicit error instead of silently re-fetching.
+the next writer downloads them (same as a cold cache), unless **`CARGO_NET_OFFLINE`**
+is set — then the build fails with a cache-miss error.
 
 ## CI prewarm then offline build
 

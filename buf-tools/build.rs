@@ -132,11 +132,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         )),
     }
 
-    let (slot_lock, waited_for_peer_writer) =
-        match build_support::lock::acquire_or_wait_for_slot(&slot, &mut edge_warn)? {
-            SlotLockState::Acquired(guard) => (Some(guard), false),
-            SlotLockState::WaitedForOtherWriter => (None, true),
-        };
+    let slot_lock = match build_support::lock::acquire_or_wait_for_slot(&slot, &mut edge_warn)? {
+        SlotLockState::Acquired(guard) => Some(guard),
+        SlotLockState::WaitedForOtherWriter => None,
+    };
 
     let sha256_url = format!("{release_base}sha256.txt");
     let minisig_url = format!("{release_base}sha256.txt.minisig");
@@ -183,14 +182,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             ));
             fs::read(&cache_file)?
         } else {
-            if waited_for_peer_writer {
-                return Err(format!(
-                    "buf-tools: cache artifact {} still missing/invalid at {} after waiting for peer writer",
-                    remote_name,
-                    cache_file.display()
-                )
-                .into());
-            }
             if offline {
                 return Err(format!(
                     "buf-tools: CARGO_NET_OFFLINE set but cache miss for {} — populate {} or clear offline mode",
@@ -235,7 +226,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             &tag,
             &source_base,
             offline,
-            waited_for_peer_writer,
             &mut info_warn,
         )?);
     }
@@ -263,7 +253,6 @@ fn fetch_optional_source(
     tag: &str,
     source_base: &str,
     offline: bool,
-    waited_for_peer_writer: bool,
     warn: &mut dyn FnMut(String),
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
     let url = format!("{source_base}{tag}.tar.gz");
@@ -281,13 +270,6 @@ fn fetch_optional_source(
     }
 
     if !archive_path.is_file() {
-        if waited_for_peer_writer {
-            return Err(format!(
-                "missing source archive {} after waiting for peer writer",
-                archive_path.display()
-            )
-            .into());
-        }
         if offline {
             return Err(format!("missing source archive {}", archive_path.display()).into());
         }
