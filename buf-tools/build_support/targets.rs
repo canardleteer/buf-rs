@@ -245,18 +245,18 @@ mod tests {
     #[test]
     fn cargo_metadata_matches_rust_const() {
         let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR");
-        // This module is `#[path]`-included from other crates (e.g. buf-toolchain); only buf-tools
-        // carries `[package.metadata.buf-tools.targets]`.
-        if !std::path::Path::new(&manifest_dir)
-            .join("build_support")
-            .join("mod.rs")
-            .is_file()
-        {
-            return;
-        }
+        // This module is `#[path]`-included from other crates (e.g. buf-toolchain); only
+        // **buf-tools** carries `[package.metadata.buf-tools.targets]` in its manifest.
         let manifest_path = format!("{manifest_dir}/Cargo.toml");
         let raw = fs::read_to_string(&manifest_path).expect("read Cargo.toml");
         let value: toml::Value = toml::from_str(&raw).expect("parse Cargo.toml");
+        let pkg_name = value
+            .get("package")
+            .and_then(|p| p.get("name"))
+            .and_then(|n| n.as_str());
+        if pkg_name != Some("buf-tools") {
+            return;
+        }
 
         let targets_tbl = value
             .get("package")

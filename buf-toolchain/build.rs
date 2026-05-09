@@ -1,6 +1,6 @@
 //! Download and install official Buf release artifacts (see crate README).
 
-#[path = "../buf-tools/build_support/mod.rs"]
+#[path = "build_support/mod.rs"]
 mod build_support;
 
 use std::env;
