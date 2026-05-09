@@ -63,6 +63,16 @@ to crates.io from a clean tree: **`cargo publish -p buf-tools`** (after **`cargo
 if you want a no-upload rehearsal). **`cargo publish --dry-run`** does not consume a
 version on crates.io.
 
+## CI (GitHub Actions)
+
+- **Workflow:** [`.github/workflows/ci.yml`](.github/workflows/ci.yml) — runs on
+  **`push`** and **`pull_request`** to **`main`**, on a **matrix** of hosted runners
+  (linux amd64/arm64, macos arm64, windows amd64; optional **macos amd64** row is
+  commented in the YAML).
+- **Steps:** **`cargo fmt --check`**, **`cargo clippy`**, **`cargo test`**, then both
+  **`buf-tools-examples`** examples via [`.github/ci-scripts/run-examples.sh`](.github/ci-scripts/run-examples.sh)
+  (same script can be run locally).
+
 ## Linting
 
 Before merging risky changes:
@@ -77,7 +87,7 @@ Before merging risky changes:
   `write_executable`, `targets`, or `fetch` in **`buf-tools/build_support/`**
   affect **both** crates; run workspace tests when touching that tree.
 - **`buf-toolchain` layout contract** — workspace **`cargo test`** does not
-  prove nested-install behavior in isolation. Run: 
+  prove nested-install behavior in isolation. Run:
   **`cargo test -p buf-toolchain --locked --test managed_bin_layout -- --ignored`**
 - **`buf-toolchain` `[[bin]]`** — Cargo only **`cargo install`**s crates that
   expose a binary (or installable example). The installed binary is
