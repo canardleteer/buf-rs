@@ -66,10 +66,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let mut lock_warn = |msg: String| emit_toolchain_warn(msg);
-    let (slot_lock, waited_for_peer_writer) =
+    let slot_lock =
         match build_support::lock::acquire_or_wait_for_slot(&cache_slot, &mut lock_warn)? {
-            SlotLockState::Acquired(guard) => (Some(guard), false),
-            SlotLockState::WaitedForOtherWriter => (None, true),
+            SlotLockState::Acquired(guard) => Some(guard),
+            SlotLockState::WaitedForOtherWriter => None,
         };
 
     let tag = format!("v{core}");
@@ -113,14 +113,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             ensure_unix_executable(&cache_file, rt.windows)?;
             fs::read(&cache_file)?
         } else {
-            if waited_for_peer_writer {
-                return Err(format!(
-                    "buf-toolchain: cache artifact {} still missing/invalid at {} after waiting for peer writer",
-                    remote_name,
-                    cache_file.display()
-                )
-                .into());
-            }
             if offline {
                 return Err(format!(
                     "buf-toolchain: CARGO_NET_OFFLINE set but cache miss for {} at {}",

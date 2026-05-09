@@ -3,7 +3,7 @@
 # Rustfmt/clippy/test/example orchestration lives in .github/ci-scripts/run-examples.sh
 # so this file stays mostly declarative.
 # -----------------------------------------------------------------------------
-name: CI
+name: rust-tests
 
 # Run on pushes to main and on pull requests targeting main (merge-request flow).
 on:
