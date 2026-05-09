@@ -10,25 +10,15 @@
 
 Rust workspace distributing the official
 [`buf`](https://github.com/bufbuild/buf) CLI plus `protoc-gen-buf-breaking` and
-`protoc-gen-buf-lint` via two crates: **`buf-tools`** for Rust dependency
-integration and **`buf-toolchain`** for **`cargo install buf-toolchain`** (and
-optionally **`[build-dependencies]`**) so upstream binaries land in a single
-canonical directory (default **`$CARGO_HOME/bin`**). Cargo requires every
-installable crate to ship at least one executable — this crate installs
-**`validate-cargo-buf-toolchain`**, which (unless
-**`BUF_RS_VALIDATE_OFFLINE=1`**) re-downloads **`sha256.txt`** +
-**`sha256.txt.minisign`** from GitHub for your installed Buf core, verifies
-**minisign**, compares file hashes to the manifest, compares
-**`releases/latest`** to **`buf --version`**, and checks crates.io for
-**`buf-toolchain`** when a newer Buf exists. **`buf`** and
-**`protoc-gen-buf-*`** themselves come from **`build.rs`**. Binaries are
-**pinned** to upstream Buf releases (**minisign** + **`sha256.txt`**) and
-downloaded on the consumer machine.
+`protoc-gen-buf-lint` via two crates:
 
-Why build-time download is required: official Buf binaries are too large to ship
-inside a crates.io package (the registry cap is about 10 MiB per crate upload),
-so `buf-tools` cannot vendor binaries the way some smaller binary-vendoring
-crates do.
+- **`buf-tools`** for Rust dependency integration
+- **`buf-toolchain`** for **`cargo install buf-toolchain`**
+
+**Why build-time download is required:** official Buf binaries are too large to
+ship inside a crates.io package (the registry cap is about 10 MiB per crate
+upload), so `buf-tools` cannot vendor binaries the way some smaller
+binary-vendoring crates do.
 
 **Repository home:** [github.com/canardleteer/buf-rs](https://github.com/canardleteer/buf-rs)
 
