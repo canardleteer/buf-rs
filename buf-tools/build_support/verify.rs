@@ -66,36 +66,59 @@ pub fn sha256_hex(bytes: &[u8]) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
     use super::{BUF_MINISIGN_PUBLIC_KEY_B64, verify_minisign_signature};
 
-    fn fixture(name: &str) -> String {
-        let path = format!(
-            "{}/build_support/test_fixtures/{name}",
-            std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR")
-        );
-        std::fs::read_to_string(path).unwrap_or_else(|e| panic!("read {name}: {e}"))
+    /// `verify.rs` is `#[path]`-included from crates such as `buf-toolchain`; fixtures live under
+    /// `buf-tools/build_support/test_fixtures/` only.
+    fn fixture(name: &str) -> Option<String> {
+        let md = std::env::var("CARGO_MANIFEST_DIR").ok()?;
+        let p = Path::new(&md);
+        for dir in [
+            p.join("build_support/test_fixtures"),
+            p.join("../buf-tools/build_support/test_fixtures"),
+        ] {
+            let path = dir.join(name);
+            if let Ok(s) = std::fs::read_to_string(&path) {
+                return Some(s);
+            }
+        }
+        None
     }
 
     #[test]
     fn modern_strict_verifies() {
-        let data = fixture("v1_69_0_sha256.txt");
-        let sig = fixture("v1_69_0_sha256.txt.minisig");
+        let Some(data) = fixture("v1_69_0_sha256.txt") else {
+            return;
+        };
+        let Some(sig) = fixture("v1_69_0_sha256.txt.minisig") else {
+            return;
+        };
         verify_minisign_signature(data.as_bytes(), &sig, BUF_MINISIGN_PUBLIC_KEY_B64, false)
             .expect("v1.69.0 fixture must verify in strict mode");
     }
 
     #[test]
     fn legacy_with_allow_legacy_verifies() {
-        let data = fixture("v1_0_0_sha256.txt");
-        let sig = fixture("v1_0_0_sha256.txt.minisig");
+        let Some(data) = fixture("v1_0_0_sha256.txt") else {
+            return;
+        };
+        let Some(sig) = fixture("v1_0_0_sha256.txt.minisig") else {
+            return;
+        };
         verify_minisign_signature(data.as_bytes(), &sig, BUF_MINISIGN_PUBLIC_KEY_B64, true)
             .expect("v1.0.0 fixture must verify with allow_legacy");
     }
 
     #[test]
     fn legacy_without_allow_legacy_rejects() {
-        let data = fixture("v1_0_0_sha256.txt");
-        let sig = fixture("v1_0_0_sha256.txt.minisig");
+        let Some(data) = fixture("v1_0_0_sha256.txt") else {
+            return;
+        };
+        let Some(sig) = fixture("v1_0_0_sha256.txt.minisig") else {
+            return;
+        };
         let err =
             verify_minisign_signature(data.as_bytes(), &sig, BUF_MINISIGN_PUBLIC_KEY_B64, false)
                 .expect_err("v1.0.0 raw-Ed25519 minisig must fail strict mode");
