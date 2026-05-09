@@ -50,6 +50,22 @@ pub fn write_executable(path: &Path, bytes: &[u8], windows: bool) -> Result<(), 
     Ok(())
 }
 
+/// On Unix builds (`windows == false`), set mode `0o755` on `path` so the file can be executed.
+///
+/// Cached release blobs are written with [`fs::write`], which typically yields `0o644`; symlink-based
+/// layout modes point `bin/` entries at the cache file, so the cache inode must carry execute bits.
+pub fn ensure_unix_executable(path: &Path, windows: bool) -> Result<(), String> {
+    #[cfg(unix)]
+    if !windows {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = fs::Permissions::from_mode(0o755);
+        fs::set_permissions(path, mode).map_err(|e| format!("chmod {}: {e}", path.display()))?;
+    }
+    #[cfg(not(unix))]
+    let _ = (path, windows);
+    Ok(())
+}
+
 /// Ensure file at `dest` matches `expected_sha256` hex; otherwise remove.
 pub fn verify_cached_file(dest: &Path, expected_sha256: &str) -> Result<bool, String> {
     if !dest.is_file() {

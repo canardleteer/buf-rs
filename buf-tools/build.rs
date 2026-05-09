@@ -12,9 +12,9 @@ use semver::Version;
 
 use build_support::targets::from_rust_triple;
 use build_support::{
-    BUF_MINISIGN_PUBLIC_KEY_B64, PREHASHED_MINISIGN_MIN_VERSION, cache_slot, config, fetch,
-    lock::SlotLockState, parse_sha256_list, sha256_hex, source, target_supported, triples,
-    verify_cached_file, verify_minisign_signature, write_executable,
+    BUF_MINISIGN_PUBLIC_KEY_B64, PREHASHED_MINISIGN_MIN_VERSION, cache_slot, config,
+    ensure_unix_executable, fetch, lock::SlotLockState, parse_sha256_list, sha256_hex, source,
+    target_supported, triples, verify_cached_file, verify_minisign_signature, write_executable,
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -208,6 +208,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .into());
             }
             fs::write(&cache_file, &b)?;
+            ensure_unix_executable(&cache_file, rt.windows)?;
             b
         };
 
@@ -476,6 +477,7 @@ fn link_or_copy_cache_artifact(
     if dest.exists() {
         remove_path(dest)?;
     }
+    ensure_unix_executable(source, windows)?;
     match symlink_file(source, dest) {
         Ok(()) => Ok(()),
         Err(err) => {

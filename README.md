@@ -8,24 +8,36 @@
 >
 > Decide if that degree of automation is appropriate for your requirements.
 
-Rust workspace distributing the official [`buf`](https://github.com/bufbuild/buf)
-CLI plus `protoc-gen-buf-breaking` and `protoc-gen-buf-lint` via two crates:
-**`buf-tools`** for Rust dependency integration and **`buf-toolchain`** for
-managed install directories. Binaries are **pinned** to upstream Buf releases
-(**minisign** + **`sha256.txt`**) and downloaded on the consumer machine.
+Rust workspace distributing the official
+[`buf`](https://github.com/bufbuild/buf) CLI plus `protoc-gen-buf-breaking` and
+`protoc-gen-buf-lint` via two crates: **`buf-tools`** for Rust dependency
+integration and **`buf-toolchain`** for **`cargo install buf-toolchain`** (and
+optionally **`[build-dependencies]`**) so upstream binaries land in a single
+canonical directory (default **`$CARGO_HOME/bin`**). Cargo requires every
+installable crate to ship at least one executable — this crate installs
+**`validate-cargo-buf-toolchain`**, which (unless
+**`BUF_RS_VALIDATE_OFFLINE=1`**) re-downloads **`sha256.txt`** +
+**`sha256.txt.minisign`** from GitHub for your installed Buf core, verifies
+**minisign**, compares file hashes to the manifest, compares
+**`releases/latest`** to **`buf --version`**, and checks crates.io for
+**`buf-toolchain`** when a newer Buf exists. **`buf`** and
+**`protoc-gen-buf-*`** themselves come from **`build.rs`**. Binaries are
+**pinned** to upstream Buf releases (**minisign** + **`sha256.txt`**) and
+downloaded on the consumer machine.
 
 Why build-time download is required: official Buf binaries are too large to ship
 inside a crates.io package (the registry cap is about 10 MiB per crate upload),
 so `buf-tools` cannot vendor binaries the way some smaller binary-vendoring
 crates do.
 
-Repository home: **[github.com/canardleteer/buf-rs](https://github.com/canardleteer/buf-rs)**
-(rename may lag the crate; URLs in **`Cargo.toml`** should match the canonical repo).
+**Repository home:** [github.com/canardleteer/buf-rs](https://github.com/canardleteer/buf-rs)
 
 ## Usage
 
-Use one of these two installation patterns, depending on whether you are wiring
-Buf into Rust code or installing a managed toolchain directory.
+Use **`buf-tools`** when Rust code needs resolved paths to the binaries, or
+**`buf-toolchain`** when you want **`cargo install`** (or a
+**`[build-dependencies]`** hook) to place **`buf`** and **`protoc-gen-buf-*`**
+into your canonical bin directory.
 
 ### `buf-tools` (Cargo.toml dependency)
 
@@ -41,22 +53,42 @@ let buf = buf_tools::buf_bin_path();
 let _ = Command::new(buf).arg("--version").status();
 ```
 
-### `buf-toolchain` (`cargo install`)
+### `buf-toolchain` (`cargo install` or build dependency)
+
+Primary workflow:
 
 ```bash
 cargo install buf-toolchain
 ```
 
-The `buf-toolchain` build step downloads and verifies official release
-artifacts, then installs available binaries into a managed directory:
+The **`build.rs`** shares **`buf-tools`’ `build_support`** (verify, lock,
+targets) and installs **`buf`** and **`protoc-gen-buf-*`** with plain names
+(`*.exe` on Windows). **By default** those binaries are written **directly** to
+**`$CARGO_HOME/bin`** (atomic install). **`cargo install`** also copies
+**`validate-cargo-buf-toolchain`** — run it after install for local checks plus
+GitHub / crates.io checks, or set **`BUF_RS_VALIDATE_OFFLINE=1`** to skip
+network I/O.
 
-- `BUF_RS_TOOLCHAIN_BIN_DIR` (optional) installs directly into this flat directory.
-- Otherwise install path defaults to
-  `$CARGO_HOME/buf-toolchain/<version-core>/<target>/bin` (or
-  `~/.cargo/buf-toolchain/...` when `CARGO_HOME` is unset).
+Alternatively, add **`buf-toolchain`** under **`[build-dependencies]`** so
+**`cargo build`** runs the same **`build.rs`** without using **`cargo
+install`**:
+
+```toml
+[build-dependencies]
+buf-toolchain = "1.69.0"
+```
+
+Upstream asset names such as `buf-Linux-x86_64` exist **only under the download
+cache**.
+
+- `BUF_RS_TOOLCHAIN_BIN_DIR` (optional) — install into this directory instead of
+  **`$CARGO_HOME/bin`**.
+- Otherwise binaries go to **`$CARGO_HOME/bin`** (or `~/.cargo/bin`).
 - `BUF_RS_CACHE_DIR` (optional) overrides the download cache root.
-- `BUF_RS_RELEASE_BASE_URL` (optional) overrides the release asset base URL
-  for both crates.
+- `BUF_RS_RELEASE_BASE_URL` (optional) overrides the release asset base URL for
+  both crates (and runtime validation in **`validate-cargo-buf-toolchain`**).
+- `BUF_RS_VALIDATE_OFFLINE` (optional, **`validate-cargo-buf-toolchain`**) — set
+  to **`1`** to skip GitHub / crates.io (local checks only).
 - `BUF_RS_SOURCE_BASE_URL` (optional, `buf-tools` only) overrides optional
   upstream source tarball base URL.
 - `BUF_RS_BUILD_LOG` (optional, `buf-tools` only) controls build-script logging
