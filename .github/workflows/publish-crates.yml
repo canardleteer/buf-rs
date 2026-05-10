@@ -180,7 +180,7 @@ jobs:
           cargo generate-lockfile
 
       - name: Upload Cargo.toml snapshots (debugging)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: publish-cargo-toml-${{ inputs.channel }}-${{ github.run_id }}-${{ github.run_attempt }}-verify
           path: |
@@ -298,7 +298,7 @@ jobs:
           cargo generate-lockfile
 
       - name: Upload Cargo.toml snapshots (debugging)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: publish-cargo-toml-${{ inputs.channel }}-${{ github.run_id }}-${{ github.run_attempt }}-upload
           path: |
@@ -368,10 +368,11 @@ jobs:
           echo "tag=${TAG}" >> "${GITHUB_OUTPUT}"
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4.0.0
 
-      - name: Build integration image
-        uses: docker/build-push-action@v6
+      # Image only: OS + Rust base, rust-toolchain.toml, cargo fetch (protoc-bin-vendored). No crates.io buf-tools yet.
+      - name: Build integration Docker image
+        uses: docker/build-push-action@v7.1.0
         with:
           context: ${{ steps.stage.outputs.context }}
           push: false
@@ -381,7 +382,8 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Run integration container
+      # ENTRYPOINT runs entrypoint.sh: cargo add/install at TEST_CRATE_VERSION, buf --version, buf build, both examples.
+      - name: Integration test (registry consumer smoke)
         run: |
           set -euo pipefail
           docker run --rm -e "TEST_CRATE_VERSION=${TEST_CRATE_VERSION}" buf-rs-integration:ci
