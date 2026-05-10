@@ -1,0 +1,254 @@
+# =============================================================================
+# Buf upstream release monitor — open a PR when bufbuild/buf ships a newer stable
+# than our workspace pin (root Cargo.toml / cargo xtask expected-buf-version).
+#
+# --- GitHub repository settings (do this before pushes + PR creation work) ---
+#
+# 1) Actions enabled
+#    Settings → Actions → General → allow Actions for this repository.
+#
+# 2) Workflow permissions (GITHUB_TOKEN)
+#    Settings → Actions → General → Workflow permissions → **Read and write**
+#    so this workflow can `git push` a branch and `gh pr create`. If your org
+#    enforces read-only tokens, allow an override for this repo or use a custom
+#    credential (not covered here).
+#
+# 3) Allow Actions to create pull requests (if your org shows this toggle)
+#    Enable so the workflow can open the automated bump PR.
+#
+# 4) Default branch
+#    `schedule` only runs workflows from the **default branch**; merge this file
+#    there for cron to fire.
+#
+# 5) repository_dispatch from outside GitHub
+#    Callers need a token with access to this repo (e.g. classic PAT `repo`, or
+#    fine-grained token with Contents + Metadata). Example:
+#    curl -L -X POST -H "Accept: application/vnd.github+json"
+#         -H "Authorization: Bearer TOKEN"
+#         -d '{"event_type":"buf-release","client_payload":{"version":"1.70.0"}}'
+#         https://api.github.com/repos/OWNER/REPO/dispatches
+#
+# --- Dev crates.io publish from an open bump PR (before merging to main) ---
+#
+# Use **publish-crates.yml** (manual workflow_dispatch). Set **channel** to **dev**
+# and **ref** to the bump branch (e.g. **automated/buf/1.70.0**), not **main**.
+# Upload still needs **CRATES_IO_TOKEN** and environment **crates-io-publish**;
+# see the header comments in **publish-crates.yml**.
+#
+# **gh** (workflow file is taken from **main** via **--ref main**; **-f ref=** is the
+# checkout ref for the publish jobs):
+#   gh workflow run publish-crates.yml --repo OWNER/REPO --ref main \
+#     -f channel=dev -f ref=automated/buf/X.Y.Z
+#
+# The same steps are repeated in each automated bump PR body for convenience.
+#
+# =============================================================================
+name: buf-upstream-watch
+
+on:
+  schedule:
+    # Every 6 hours (UTC)
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      override_version:
+        description: "Optional Buf X.Y.Z (empty = use bufbuild/buf releases/latest)"
+        required: false
+        type: string
+        default: ""
+  repository_dispatch:
+    types: [buf-release]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: buf-upstream-watch
+  cancel-in-progress: false
+
+jobs:
+  maybe-bump:
+    name: Check bufbuild/buf and open bump PR
+    runs-on: ubuntu-latest
+    env:
+      BUF_RS_CACHE_DIR: ${{ github.workspace }}/target/buf-rs-cache
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Resolve default branch
+        id: default_branch
+        run: |
+          set -euo pipefail
+          name="$(gh api "repos/${GITHUB_REPOSITORY}" --jq .default_branch)"
+          echo "name=${name}" >> "${GITHUB_OUTPUT}"
+
+      - name: Checkout repository
+        uses: actions/checkout@v6.0.2
+        with:
+          ref: ${{ steps.default_branch.outputs.name }}
+          fetch-depth: 0
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Read optional version hint from event
+        id: hint
+        run: |
+          set -euo pipefail
+          python3 << 'PY'
+          import json
+          import os
+
+          with open(os.environ["GITHUB_EVENT_PATH"], encoding="utf-8") as f:
+              ev = json.load(f)
+          name = os.environ["GITHUB_EVENT_NAME"]
+          hint = ""
+          if name == "workflow_dispatch":
+              inp = ev.get("inputs") or {}
+              hint = str(inp.get("override_version") or "").strip()
+          elif name == "repository_dispatch":
+              payload = ev.get("client_payload") or {}
+              hint = str(payload.get("version") or "").strip()
+          out_path = os.environ["GITHUB_OUTPUT"]
+          with open(out_path, "a", encoding="utf-8") as out:
+              out.write("buf_hint<<EOF\n")
+              out.write(hint)
+              out.write("\nEOF\n")
+          PY
+
+      - name: Resolve and validate upstream Buf version
+        id: upstream
+        run: |
+          set -euo pipefail
+          HINT="${{ steps.hint.outputs.buf_hint }}"
+          if [[ -n "${HINT}" ]]; then
+            LATEST="${HINT}"
+            bash .github/ci-scripts/buf-validate-buf-release-version.sh "${LATEST}"
+          else
+            LATEST="$(bash .github/ci-scripts/buf-upstream-latest-stable.sh)"
+            bash .github/ci-scripts/buf-validate-buf-release-version.sh "${LATEST}"
+          fi
+          echo "latest=${LATEST}" >> "${GITHUB_OUTPUT}"
+
+      - name: Compare with workspace pin
+        id: compare
+        run: |
+          set -euo pipefail
+          CURRENT="$(cargo xtask expected-buf-version)"
+          LATEST="${{ steps.upstream.outputs.latest }}"
+          echo "current=${CURRENT}" >> "${GITHUB_OUTPUT}"
+          echo "latest=${LATEST}" >> "${GITHUB_OUTPUT}"
+          if python3 .github/ci-scripts/bufsemver_upstream_is_newer.py "${CURRENT}" "${LATEST}"; then
+            echo "should_bump=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "should_bump=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Skip summary (already current or upstream not newer)
+        if: steps.compare.outputs.should_bump != 'true'
+        run: |
+          set -euo pipefail
+          {
+            echo "## Buf upstream watch — no bump"
+            echo "- **Workspace Buf core:** \`${{ steps.compare.outputs.current }}\`"
+            echo "- **bufbuild/buf latest stable:** \`${{ steps.compare.outputs.latest }}\`"
+            echo "- No PR opened (already on or past upstream core)."
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Bump, test, push, open PR (or skip if duplicate)
+        if: steps.compare.outputs.should_bump == 'true'
+        run: |
+          set -euo pipefail
+          LATEST="${{ steps.upstream.outputs.latest }}"
+          BASE="${{ steps.default_branch.outputs.name }}"
+          HEAD="automated/buf/${LATEST}"
+          CURRENT="${{ steps.compare.outputs.current }}"
+          REPO="${GITHUB_REPOSITORY}"
+
+          OWNER="${GITHUB_REPOSITORY%%/*}"
+          count="$(gh pr list --base "${BASE}" --state open --head "${OWNER}:${HEAD}" --json number --jq 'length')"
+          if [[ "${count}" != "0" ]]; then
+            {
+              echo "## Buf upstream watch — PR already open"
+              echo "Open PR exists for head branch \`${HEAD}\` — not creating another."
+            } >> "${GITHUB_STEP_SUMMARY}"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git checkout -b "${HEAD}"
+
+          cargo xtask workspace set-buf-version "${LATEST}"
+          cargo generate-lockfile
+
+          cargo fmt --all -- --check
+
+          mkdir -p "${BUF_RS_CACHE_DIR}"
+          export BUF_EXPECT_VERSION="$(cargo xtask expected-buf-version)"
+          echo "Expected Buf Version: ${BUF_EXPECT_VERSION}"
+          cargo test --workspace --locked
+
+          git add Cargo.toml Cargo.lock
+          git commit -m "chore: bump Buf pin to ${LATEST}"
+
+          git push -u origin "${HEAD}" --force-with-lease
+
+          BODY_FILE="$(mktemp)"
+          trap 'rm -f "${BODY_FILE}"' EXIT
+          export BUMP_BODY_FILE="${BODY_FILE}"
+          export BUMP_LATEST="${LATEST}"
+          export BUMP_CURRENT="${CURRENT}"
+          export BUMP_BASE="${BASE}"
+          export BUMP_HEAD="${HEAD}"
+          export BUMP_REPO="${REPO}"
+          python3 << 'PY'
+          import os
+          import textwrap
+          from pathlib import Path
+
+          latest = os.environ["BUMP_LATEST"]
+          current = os.environ["BUMP_CURRENT"]
+          base = os.environ["BUMP_BASE"]
+          head = os.environ["BUMP_HEAD"]
+          repo = os.environ["BUMP_REPO"]
+          path = Path(os.environ["BUMP_BODY_FILE"])
+          body = textwrap.dedent(
+              f"""
+              Automated bump: workspace Buf core **{current}** → **{latest}** to match [bufbuild/buf v{latest}](https://github.com/bufbuild/buf/releases/tag/v{latest}).
+
+              - [ ] Review changelog / breaking changes upstream
+              - [ ] Merge when ready, or try a **dev** publish first (below)
+
+              ### Try a dev crates.io publish (without merging to `{base}`)
+
+              Uses [publish-crates.yml](https://github.com/{repo}/actions/workflows/publish-crates.yml): **channel** `dev`, **ref** this branch (`{head}`). Requires `CRATES_IO_TOKEN` and environment **crates-io-publish** as in AGENTS.md.
+
+              **Actions UI:** **Actions** → **publish-crates** → **Run workflow** → `channel`: `dev` → `ref`: `{head}`
+
+              **CLI:**
+              ```bash
+              gh workflow run publish-crates.yml --repo {repo} --ref {base} -f channel=dev -f ref={head}
+              ```
+              (`--ref {base}` selects the workflow definition from the default branch; `-f ref=` is the checkout ref for the publish job.)
+
+              ### repository_dispatch
+
+              External automation can trigger this workflow with `event_type: buf-release` and optional `client_payload.version` (plain `X.Y.Z`).
+              """
+          ).strip()
+          path.write_text(body, encoding="utf-8")
+          PY
+
+          gh pr create \
+            --base "${BASE}" \
+            --head "${HEAD}" \
+            --title "chore: bump Buf pin to ${LATEST}" \
+            --body-file "${BODY_FILE}"
+
+          {
+            echo "## Buf upstream watch — opened PR"
+            echo "- **${CURRENT}** → **${LATEST}**"
+            echo "- Branch: \`${HEAD}\`"
+          } >> "${GITHUB_STEP_SUMMARY}"

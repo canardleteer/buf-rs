@@ -156,8 +156,10 @@ list under **Two different “versions”**).
    **`verify`** and **`upload`** both reference this environment, so each job may trigger the same protection
    rules (e.g. two review rounds if reviewers are required).
    Optional: **Deployment branches / tags** (e.g. **`main`** only — [Pro/Team private](https://docs.github.com/en/actions/reference/deployments-and-environments#deployment-branches-and-tags)).
-3. **Actions:** enabled; **`publish-crates.yml`** uses **`contents: read`** and **`actions: write`**
-  (artifact uploads). Other workflows may stay read-only for contents.
+3. **Actions:** enabled. **Workflow-specific** token needs and GitHub UI settings (**Workflow
+   permissions**, secrets, environments) are documented in the **comment headers** at the top of
+   each workflow under [`.github/workflows/`](.github/workflows/) — see especially
+   **`publish-crates.yml`** and **`buf-upstream-watch.yml`**.
 
 Local one-off: **`cargo publish -p buf-tools`** / **`buf-toolchain`** from a clean tree after
 **`cargo publish -p … --dry-run`**.
@@ -171,6 +173,11 @@ Local one-off: **`cargo publish -p buf-tools`** / **`buf-toolchain`** from a cle
   **`cargo publish -p buf-tools --dry-run --locked`** and **`buf-toolchain`** (no token; packaging gate).
 - **Publish:** [`.github/workflows/publish-crates.yml`](.github/workflows/publish-crates.yml) — manual only
   (see **Publishing** above).
+- **Buf upstream watch:** [`.github/workflows/buf-upstream-watch.yml`](.github/workflows/buf-upstream-watch.yml) —
+  scheduled / manual / **`repository_dispatch`** bump PRs when [bufbuild/buf](https://github.com/bufbuild/buf)
+  **`releases/latest`** is newer than **`cargo xtask expected-buf-version`**. **Settings, `curl` example,
+  dev publish from the bump branch,** and branch naming (**`automated/buf/X.Y.Z`**) are documented in
+  that file’s **header comments** (and in the generated PR body).
 
 ## `rust-toolchain.toml` (pinned Rust toolchain)
 
