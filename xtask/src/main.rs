@@ -3,6 +3,10 @@
 //! **Buf upstream version:** The rule `major.minor.patch` from the crate semver (ignoring
 //! pre-release / build metadata) must stay aligned with
 //! `buf-tools/build.rs` and `buf-toolchain/build.rs` (`CARGO_PKG_VERSION` → GitHub tag `vX.Y.Z`).
+//!
+//! **Set the Buf pin (maintainers):** `cargo xtask workspace set-buf-version X.Y.Z` on the root
+//! manifest, then `cargo generate-lockfile`, then set **`BUF_EXPECT_VERSION`** from
+//! **`cargo xtask expected-buf-version`** and run tests (see **`README.md`**).
 
 mod publish_inputs;
 
@@ -24,10 +28,33 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Print the `X.Y.Z` core used for `BUF_EXPECT_VERSION` in tests.
+    ///
+    /// Read from the **root workspace** `Cargo.toml`: `[workspace.package].version`, taking only
+    /// `major.minor.patch` (pre-release and build metadata are ignored — same rule as `build.rs`
+    /// when selecting GitHub tag `vX.Y.Z`).
+    ExpectedBufVersion,
     /// Crates.io publish helpers (used by `.github/workflows/publish-crates.yml`).
     Publish {
         #[command(subcommand)]
         cmd: PublishCmd,
+    },
+    /// Maintainer: set the root workspace Buf semver pin (plain `X.Y.Z`). For CI-only dev/rc
+    /// pre-release suffixes on the manifest, use **`publish apply-version`** instead.
+    Workspace {
+        #[command(subcommand)]
+        cmd: WorkspaceCmd,
+    },
+}
+
+#[derive(Subcommand)]
+enum WorkspaceCmd {
+    /// Set `[workspace.package].version` and `=X.Y.Z` pins for `buf-tools` / `buf-toolchain`.
+    ///
+    /// Confirm `https://github.com/bufbuild/buf/releases/tag/vX.Y.Z` exists before publishing.
+    SetBufVersion {
+        /// Plain semver `X.Y.Z` (no pre-release / build metadata).
+        version: String,
     },
 }
 
@@ -53,8 +80,6 @@ enum PublishCmd {
         #[arg(long, default_value = "")]
         rc_number: String,
     },
-    /// Print Buf **core** `X.Y.Z` from the current `[workspace.package].version` (for `BUF_EXPECT_VERSION`).
-    WorkspaceCore,
     /// Emit Markdown for `GITHUB_STEP_SUMMARY`: crate semver breakdown + resolved Buf versions.
     VerifySummary {
         #[arg(long)]
@@ -127,8 +152,9 @@ fn buf_upstream_core(v: &Version) -> String {
     format!("{}.{}.{}", v.major, v.minor, v.patch)
 }
 
-fn apply_bumped_version(path: &Path, new_ver: &str) {
-    let _ = must_parse_version("apply-version", new_ver);
+/// Writes `[workspace.package].version` and `=…` pins for `buf-tools` / `buf-toolchain` in the root manifest.
+fn write_workspace_version(path: &Path, new_ver: &str) {
+    let _ = must_parse_version("manifest version", new_ver);
 
     let text = fs::read_to_string(path).unwrap_or_else(|e| {
         eprintln!("xtask: read {}: {e}", path.display());
@@ -208,6 +234,11 @@ fn main() {
     let path = root_manifest();
 
     match cli.command {
+        Command::ExpectedBufVersion => {
+            let raw = read_workspace_version(&path);
+            let core = semver_core(&raw);
+            println!("{core}");
+        }
         Command::Publish { cmd } => match cmd {
             PublishCmd::Resolve {
                 channel,
@@ -263,16 +294,26 @@ fn main() {
                     }
                 };
                 let _ = must_parse_version("apply-version", &new_ver);
-                apply_bumped_version(&path, &new_ver);
+                write_workspace_version(&path, &new_ver);
                 println!("{new_ver}");
-            }
-            PublishCmd::WorkspaceCore => {
-                let raw = read_workspace_version(&path);
-                let core = semver_core(&raw);
-                println!("{core}");
             }
             PublishCmd::VerifySummary { crates_version } => {
                 emit_verify_summary(&crates_version);
+            }
+        },
+        Command::Workspace { cmd } => match cmd {
+            WorkspaceCmd::SetBufVersion { version } => {
+                assert_stable_plain_semver(&version);
+                write_workspace_version(&path, &version);
+                println!("{version}");
+                eprintln!(
+                    "xtask: wrote {} — next: cargo generate-lockfile",
+                    path.display()
+                );
+                eprintln!("xtask: then:");
+                eprintln!("  BUF_EXPECT_VERSION=\"$(cargo xtask expected-buf-version)\"");
+                eprintln!("  echo \"Expected Buf Version: ${{BUF_EXPECT_VERSION}}\"");
+                eprintln!("  cargo test --workspace --locked");
             }
         },
     }

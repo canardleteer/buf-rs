@@ -8,7 +8,7 @@ members = [
 ]
 
 [workspace.package]
-version = "1.69.0"
+version = "1.40.0"
 edition = "2024"
 license = "MIT"
 authors = ["canardleteer <eris.has.a.dad+github@gmail.com>"]
@@ -20,5 +20,5 @@ categories = ["development-tools", "api-bindings"]
 publish = true
 
 [workspace.dependencies]
-buf-tools = { path = "buf-tools", version = "=1.69.0" }
-buf-toolchain = { path = "buf-toolchain", version = "=1.69.0" }
+buf-tools = { path = "buf-tools", version = "=1.40.0" }
+buf-toolchain = { path = "buf-toolchain", version = "=1.40.0" }

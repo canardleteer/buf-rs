@@ -1,6 +1,6 @@
 [package]
 name = "xtask"
-description = "Workspace maintenance tasks (publish version bumps, etc.)."
+description = "Workspace maintenance tasks (publish helpers, set Buf pin, etc.)."
 version = "0.1.0"
 edition = "2024"
 publish = false
