@@ -4,14 +4,33 @@ Concise rules for coding agents. User-facing commands stay in [`README.md`](READ
 
 ## Two different “versions”
 
-1. **Upstream Buf release** — GitHub tag `v1.69.0`, assets under `bufbuild/buf`
-   releases. The `buf` binary’s `--version` reports this line (no crate
-   pre-release suffix).
-2. **Crate semver** — `[workspace.package].version` and `version = "=…"` pins in
-   the root [`Cargo.toml`](Cargo.toml), and what you publish to crates.io.
+**Authoritative Buf pin:** `[workspace.package].version` and the `version = "=…"` pins on
+**`buf-tools`** / **`buf-toolchain`** in the root [`Cargo.toml`](Cargo.toml). That plain
+**`X.Y.Z`** core selects the upstream GitHub tag **`vX.Y.Z`**. Any concrete version called out
+elsewhere in this file or in [`README.md`](README.md) is an **example** unless it matches
+that manifest — always trust the workspace `Cargo.toml` when they disagree.
+
+**Set the Buf pin locally (outside CI):** after confirming
+[`bufbuild/buf`](https://github.com/bufbuild/buf/releases) has tag **`vX.Y.Z`**:
+
+1. **`cargo xtask workspace set-buf-version X.Y.Z`**
+2. **`cargo generate-lockfile`**
+3. **`BUF_EXPECT_VERSION="$(cargo xtask expected-buf-version)"`**
+4. **`echo "Expected Buf Version: ${BUF_EXPECT_VERSION}"`**
+5. **`cargo test --workspace --locked`**
+
+Read the current core with **`cargo xtask expected-buf-version`** (from **`[workspace.package].version`**
+in the root **`Cargo.toml`** — same **`X.Y.Z`** as tests expect via **`BUF_EXPECT_VERSION`**).
+
+Those fields track two related notions:
+
+- **Upstream Buf release** — GitHub tag **`vX.Y.Z`** (illustrative example: **`v1.40.0`**),
+  assets under **`bufbuild/buf`** releases. The **`buf`** binary’s **`--version`** reports
+  this line (no crate pre-release suffix).
+- **Crate semver** — the workspace manifest fields above, and what you publish to crates.io.
 
 For **canary** publishes, crate semver must **not** equal the final stable slot
-(`1.69.0`) until you intentionally ship stable. The manual publish workflow defaults to
+(e.g. **`1.40.0`**) until you intentionally ship stable. The manual publish workflow defaults to
 **`dev`**: **`{core}-test.<github.run_id>`** (pipeline validation). Use **`rc`** with
 **`rc_number`** for **`{core}-rc.N`** when testing with others. Never burn the stable
 slot until you intentionally ship **`stable`**.
@@ -19,7 +38,7 @@ slot until you intentionally ship **`stable`**.
 **Crate semver tracks the Buf binary, not an independent series.** The
 **core** semver (before any `-` pre-release) **MUST** match the upstream Buf release
 that `buf --version` corresponds to. Never invent a crates-only patch
-such as `1.69.1` when Buf is still shipping `1.69.0`. If a bad publish consumes
+such as **`1.40.1`** when Buf is still shipping **`1.40.0`**. If a bad publish consumes
 a semver slot on crates.io, recover with **pre-release identifiers** so the
 published version still reflects the same Buf release, not a fabricated crate
 lineage.
@@ -60,7 +79,7 @@ Documentation that must stay in sync when keys/preference/precedence change:
 ## Publishing
 
 **Publishable crates:** **`buf-tools`** and **`buf-toolchain`** (see root [`Cargo.toml`](Cargo.toml)
-`[workspace.package]` and `[workspace.dependencies]` pins — keep them in sync when bumping Buf).
+`[workspace.package]` and `[workspace.dependencies]` pins — keep them in sync when changing the pinned Buf version).
 
 - **`cargo publish --dry-run`** does not consume a version on crates.io (safe rehearsal).
 - **Stable `X.Y.Z` is irreversible:** a first successful publish of that version cannot be
@@ -82,7 +101,7 @@ Documentation that must stay in sync when keys/preference/precedence change:
   **`cargo publish --allow-dirty --locked`** (ephemeral `Cargo.toml` / `Cargo.lock`, not committed).
 - **Stable:** requires **`channel=stable`**, dispatch from **`main`**, **`inputs.ref`** set to **`main`**, and
   **`confirm_stable_version`** matching **`[workspace.package].version`**; no **`--allow-dirty`**; no
-  in-runner version bump. Use **`dev`** or **`rc`** to exercise non-**`main`** refs.
+  in-runner ephemeral manifest version (dev/rc). Use **`dev`** or **`rc`** to exercise non-**`main`** refs.
 - **Crate pre-release vs Buf binary:** Crate versions may include **`-test.*`** or **`-rc.*`** for buf-rs
   packaging only. **`build.rs`** still downloads the **stable** Buf GitHub release **`v{major}.{minor}.{patch}`**
   from **`CARGO_PKG_VERSION`** (see **`buf-tools/build.rs`** / **`buf-toolchain/build.rs`**). The verify job
@@ -98,7 +117,23 @@ Documentation that must stay in sync when keys/preference/precedence change:
   private repos and dry testing. Remove the **`upload`** job’s **`if:`** gate (see TEMP comment in the
   YAML) once the token is always configured.
 - **Publish helpers:** [`xtask`](xtask/) — **`cargo xtask publish resolve`**, **`apply-version`**,
-  **`workspace-core`**, **`verify-summary`** (alias in [`.cargo/config.toml`](.cargo/config.toml); uses **`--locked`**).
+  **`verify-summary`**, **`cargo xtask expected-buf-version`**, and **`cargo xtask workspace set-buf-version`**
+  (alias in [`.cargo/config.toml`](.cargo/config.toml); uses **`--locked`**). See **Pinning the workspace Buf release (`set-buf-version`)** below.
+
+### Pinning the workspace Buf release (`set-buf-version`)
+
+**`cargo xtask workspace set-buf-version X.Y.Z`** updates the **root** [`Cargo.toml`](Cargo.toml) in one step:
+**`[workspace.package].version`** and the **`version = "=X.Y.Z"`** entries for **`buf-tools`** and
+**`buf-toolchain`** under **`[workspace.dependencies]`**. Use a plain **`X.Y.Z`** (no pre-release) that
+matches an existing **`bufbuild/buf`** tag **`vX.Y.Z`**.
+
+This is for **maintainers changing which upstream Buf release the workspace pins** (any direction —
+older or newer). It is **not** the same as **`publish apply-version`**, which only rewrites the manifest
+on CI runners for **`dev`** / **`rc`** channels using **`-test.*`** / **`-rc.*`** crate suffixes.
+
+After running it: **`cargo generate-lockfile`**, then set **`BUF_EXPECT_VERSION`** from
+**`cargo xtask expected-buf-version`** and run **`cargo test --workspace --locked`** (see the numbered
+list under **Two different “versions”**).
 
 ### GitHub settings (before upload works)
 
@@ -212,14 +247,17 @@ behavior; manifest metadata and README mirror it for tooling and humans).
    (front-of-listing visibility for `cargo add` users).
 
 The `cargo_metadata_matches_rust_const` `#[test]` catches drift between (1) and
-(2), but **NOT** README drift — keep (3) in sync by hand. If you bump a `min_version`,
+(2), but **NOT** README drift — keep (3) in sync by hand. If you raise a target's `min_version`,
 also confirm whether [`PREHASHED_MINISIGN_MIN_VERSION`](buf-tools/build_support/verify.rs)
 still describes the upstream signing-algorithm boundary; if Buf flips again,
 update that constant and add fixtures + tests for the new mode.
 
-When the **crate's own pinned Buf version** moves (e.g. `1.69.0` → `1.70.0`):
+When the **crate's own pinned Buf version** moves (e.g. **`1.40.0` → `1.41.0`**):
 
-- Update `[workspace.package].version` in the root [`Cargo.toml`](Cargo.toml) (and the `=` pin in `[workspace.dependencies]`).
-- Update README/AGENTS prose that names the version explicitly.
-- Run `cargo generate-lockfile` so [`Cargo.lock`](Cargo.lock) reflects the bump.
-- Confirm `BUF_EXPECT_VERSION=<new> cargo test --workspace --locked` is still green.
+- Prefer **`cargo xtask workspace set-buf-version X.Y.Z`** (updates **`[workspace.package].version`**
+  and **`[workspace.dependencies]`** `=` pins together).
+- Run **`cargo generate-lockfile`** so [`Cargo.lock`](Cargo.lock) reflects the new version.
+- Confirm tests with **`BUF_EXPECT_VERSION="$(cargo xtask expected-buf-version)"`** (and
+  **`echo "Expected Buf Version: ${BUF_EXPECT_VERSION}"`** if you want a clear log line) are still green.
+- Optionally refresh **example-only** version mentions in [`README.md`](README.md) / this file so
+  they stay helpful — they are **not** the source of truth.

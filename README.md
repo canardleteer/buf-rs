@@ -34,7 +34,8 @@ into your canonical bin directory.
 
 ```toml
 [dependencies]
-buf-tools = "1.69.0"
+# Example only — use the same X.Y.Z as the Buf release you depend on (see root Cargo.toml).
+buf-tools = "1.40.0"
 ```
 
 ```rust
@@ -66,7 +67,8 @@ install`**:
 
 ```toml
 [build-dependencies]
-buf-toolchain = "1.69.0"
+# Example only — align with root [workspace.package].version in this repo or your chosen pin.
+buf-toolchain = "1.40.0"
 ```
 
 - `BUF_RS_TOOLCHAIN_BIN_DIR` (optional) — install into this directory instead of
@@ -87,6 +89,12 @@ buf-toolchain = "1.69.0"
 
 See [`buf-toolchain/README.md`](buf-toolchain/README.md) for full env-var precedence and examples.
 
+### Additional information
+
+For crate-specific variants (including source bundle behavior), see
+[`buf-tools/README.md`](buf-tools/README.md) and
+[`buf-toolchain/README.md`](buf-toolchain/README.md).
+
 ### CI prewarm then offline builds
 
 Use a shared cache directory in CI to prewarm online, then run offline:
@@ -98,9 +106,18 @@ BUF_RS_CACHE_DIR="$PWD/target/buf-rs-cache" CARGO_NET_OFFLINE=true \
   cargo build -p buf-tools -p buf-toolchain
 ```
 
-For crate-specific variants (including source bundle behavior), see
-[`buf-tools/README.md`](buf-tools/README.md) and
-[`buf-toolchain/README.md`](buf-toolchain/README.md).
+## Which Buf version does this repo pin?
+
+**Authoritative:** [`Cargo.toml`](Cargo.toml)'s **`[workspace.package].version`**
+(plain **`X.Y.Z`**) and the matching **`=X.Y.Z`** pins on **`buf-tools`** /
+**`buf-toolchain`** under **`[workspace.dependencies]`**. **`build.rs`**
+downloads **`bufbuild/buf`** tag **`vX.Y.Z`** from that core.
+
+**Examples**: in this file use a concrete version for copy-paste only — if they
+drift from the manifest, **trust the `Cargo.toml`**.
+
+**Reading the pinned core:** `cargo xtask expected-buf-version`
+(prints **`X.Y.Z`** from **`[workspace.package].version`**).
 
 ## Supported targets
 
@@ -177,12 +194,42 @@ cargo run -p buf-tools-examples --example protoc_with_buf_plugins
 Use the same optional **`BUF_RS_CACHE_DIR`** as above if you want Buf artifacts
 under the workspace instead of the default cache directory.
 
+### `cargo xtask workspace set-buf-version`
+
+Maintainers use this to **set** which upstream Buf release the workspace tracks
+(plain **`X.Y.Z`** in the **root** [`Cargo.toml`](Cargo.toml):
+**`[workspace.package].version`** plus **`=X.Y.Z`** pins on **`buf-tools`** and
+**`buf-toolchain`**). That can be an **older or newer** Buf line — it is not
+only “moving forward.”
+
+It is **not** the same as **`cargo xtask publish apply-version`**, which the
+publish workflow uses on CI to apply **`-test.*`** / **`-rc.*`** crate
+pre-release suffixes for **`dev`** / **`rc`** channels.
+
+**Change the pin (maintainers, outside CI):** confirm the release exists on
+[bufbuild/buf releases](https://github.com/bufbuild/buf/releases), then:
+
+```bash
+cargo xtask workspace set-buf-version X.Y.Z
+cargo generate-lockfile
+BUF_EXPECT_VERSION="$(cargo xtask expected-buf-version)"
+echo "Expected Buf Version: ${BUF_EXPECT_VERSION}"
+cargo test --workspace --locked
+```
+
 ## Tests
 
 ```bash
 BUF_RS_CACHE_DIR="$PWD/target/buf-rs-cache"
-BUF_EXPECT_VERSION=1.69.0 cargo test --workspace --locked
+BUF_EXPECT_VERSION="$(cargo xtask expected-buf-version)"
+echo "Expected Buf Version: ${BUF_EXPECT_VERSION}"
+cargo test --workspace --locked
 ```
+
+- `BUF_EXPECT_VERSION` must match the workspace Buf core **`X.Y.Z`**.
+- **`cargo xtask expected-buf-version`** reads **`[workspace.package].version`**
+  in the root **`Cargo.toml`**.
+- You can set **`BUF_EXPECT_VERSION`** manually instead if you prefer.
 
 ## License
 

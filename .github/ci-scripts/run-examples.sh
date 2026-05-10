@@ -21,9 +21,10 @@ cd "$ROOT"
 export BUF_RS_CACHE_DIR="${BUF_RS_CACHE_DIR:-${ROOT}/target/buf-rs-cache}"
 mkdir -p "${BUF_RS_CACHE_DIR}"
 
-BUF_EXPECT_VERSION="$(bash "${SCRIPT_DIR}/read-workspace-version.sh")"
+# Same Buf core as `build.rs` / README: major.minor.patch from [workspace.package].version.
+BUF_EXPECT_VERSION="$(cargo xtask expected-buf-version)"
 export BUF_EXPECT_VERSION
-echo "BUF_EXPECT_VERSION=${BUF_EXPECT_VERSION}"
+echo "Expected Buf Version: ${BUF_EXPECT_VERSION}"
 
 echo "==> cargo fmt --all -- --check"
 cargo fmt --all -- --check

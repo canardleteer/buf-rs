@@ -3,9 +3,10 @@
 #
 # --- Verify job summary — source of truth (keep in sync when changing versioning) ---
 #
-# The **Crates Resolved Version** subsection and **resolved buf for buf-tools /
-# buf-toolchain** lines are emitted by:
-#   `cargo xtask publish verify-summary --crates-version "$(…)"`
+# The verify job summary lists **workspace crate semver** (full `[workspace.package].version`,
+# including `-test`/`-rc` when present) and **Buf core** (`cargo xtask expected-buf-version`),
+# then the **Crates Resolved Version** subsection and **resolved buf** lines from:
+#   `cargo xtask publish verify-summary --crates-version "$(read-workspace-version.sh)"`
 #   (see `xtask/src/main.rs`, fn `emit_verify_summary`).
 #
 # The Buf release tag **vX.Y.Z** is derived only from `major.minor.patch` of the crate
@@ -165,7 +166,7 @@ jobs:
           set -euo pipefail
           cargo xtask publish apply-version --channel "${CHANNEL}" --run-id "${RUN_ID}" --rc-number "${RC_NUMBER}"
 
-      - name: Regenerate Cargo.lock after version bump (dev/rc only)
+      - name: Regenerate Cargo.lock after dev/rc manifest version (dev/rc only)
         if: inputs.channel == 'dev' || inputs.channel == 'rc'
         run: |
           set -euo pipefail
@@ -184,7 +185,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ "${{ inputs.channel }}" = "dev" ] || [ "${{ inputs.channel }}" = "rc" ]; then
-            CORE="$(cargo xtask publish workspace-core)"
+            CORE="$(cargo xtask expected-buf-version)"
             echo "BUF_EXPECT_VERSION=${CORE}" >> "${GITHUB_ENV}"
           else
             echo "BUF_EXPECT_VERSION=$(bash .github/ci-scripts/read-workspace-version.sh)" >> "${GITHUB_ENV}"
@@ -211,12 +212,15 @@ jobs:
           set -euo pipefail
           HEAD_SHA="$(git rev-parse HEAD)"
           VER="$(bash .github/ci-scripts/read-workspace-version.sh)"
+          BUF_CORE="$(cargo xtask expected-buf-version)"
           {
             echo "## Publish verify"
             echo "- **Channel:** ${CHANNEL}"
             echo "- **Checkout ref (input):** ${REF}"
             echo "- **Commit:** \`${HEAD_SHA}\`"
             echo "- **Workflow dispatch ref:** \`${{ github.ref }}\`"
+            echo "- **Workspace crate semver** (\`[workspace.package].version\`, full string): \`${VER}\`"
+            echo "- **Buf core** (upstream tag \`vX.Y.Z\`, \`build.rs\` / \`BUF_EXPECT_VERSION\`): \`${BUF_CORE}\`"
             echo ""
             cargo xtask publish verify-summary --crates-version "${VER}"
             echo ""
@@ -279,7 +283,7 @@ jobs:
           set -euo pipefail
           cargo xtask publish apply-version --channel "${CHANNEL}" --run-id "${RUN_ID}" --rc-number "${RC_NUMBER}"
 
-      - name: Regenerate Cargo.lock after version bump (dev/rc only)
+      - name: Regenerate Cargo.lock after dev/rc manifest version (dev/rc only)
         if: inputs.channel == 'dev' || inputs.channel == 'rc'
         run: |
           set -euo pipefail
@@ -298,7 +302,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ "${{ inputs.channel }}" = "dev" ] || [ "${{ inputs.channel }}" = "rc" ]; then
-            CORE="$(cargo xtask publish workspace-core)"
+            CORE="$(cargo xtask expected-buf-version)"
             echo "BUF_EXPECT_VERSION=${CORE}" >> "${GITHUB_ENV}"
           else
             echo "BUF_EXPECT_VERSION=$(bash .github/ci-scripts/read-workspace-version.sh)" >> "${GITHUB_ENV}"
