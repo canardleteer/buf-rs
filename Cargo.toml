@@ -4,6 +4,7 @@ members = [
     "examples",
     "buf-tools",
     "buf-toolchain",
+    "xtask",
 ]
 
 [workspace.package]
