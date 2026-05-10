@@ -1,6 +1,21 @@
 # =============================================================================
 # Manual crates.io publish — buf-tools + buf-toolchain
 #
+# --- Verify job summary — source of truth (keep in sync when changing versioning) ---
+#
+# The **Crates Resolved Version** subsection and **resolved buf for buf-tools /
+# buf-toolchain** lines are emitted by:
+#   `cargo xtask publish verify-summary --crates-version "$(…)"`
+#   (see `xtask/src/main.rs`, fn `emit_verify_summary`).
+#
+# The Buf release tag **vX.Y.Z** is derived only from `major.minor.patch` of the crate
+# semver (ignoring pre-release / build). That rule MUST match:
+#   - `buf-tools/build.rs` (~39–40: `Version::parse` on `CARGO_PKG_VERSION`, then core triple)
+#   - `buf-toolchain/build.rs` (~29–30: same)
+#
+# When you change publish/version/summary behavior, update xtask, this header, and both
+# `build.rs` files together if the Buf-resolution rule changes.
+#
 # --- GitHub settings prerequisites (do this before the pipeline can upload) ---
 #
 # 1) Secret (repository or environment-scoped)
@@ -19,14 +34,18 @@
 #    - Optional: **Deployment branches and tags** (e.g. main only) — see GitHub docs for your plan.
 #
 # 3) Actions
-#    - Settings → Actions → General: enable Actions; workflow permissions read-only
+#    - Settings → Actions → General: enable Actions; workflow permissions below
 #
 # Upload is skipped (job skipped, workflow green) when CRATES_IO_TOKEN is unset —
 # safe for dry testing. Remove the TEMP "if:" line on the upload job when the
 # token is always configured (see comment on that job).
 #
-# Prerelease path: `cargo xtask publish apply-prerelease`, then `cargo generate-lockfile`, then
-# publish with --allow-dirty --locked (changes are never committed). See xtask/ + .cargo/config.toml.
+# Dev/rc path: `cargo xtask publish apply-version`, then `cargo generate-lockfile`, then
+# publish with `--allow-dirty --locked` (changes are never committed). See `xtask/` + `.cargo/config.toml`.
+#
+# `publish resolve` / `publish apply-version` always receive `--channel`, `--run-id`, and
+# `--rc-number` (empty strings when unused). `xtask/src/publish_inputs.rs` validates the
+# channel-specific rules (including rc: positive decimal, no leading zeros).
 #
 # =============================================================================
 name: publish-crates
@@ -35,14 +54,19 @@ on:
   workflow_dispatch:
     inputs:
       channel:
-        description: prerelease (default) appends -rc.RUN_ID; stable uses committed X.Y.Z only
+        description: dev (default) = -test.RUN_ID; rc = -rc.N; stable = committed X.Y.Z only
         type: choice
-        default: prerelease
+        default: dev
         options:
-          - prerelease
+          - dev
+          - rc
           - stable
+      rc_number:
+        description: For channel=rc only — positive integer (release candidate number)
+        type: string
+        default: ""
       ref:
-        description: Git ref to checkout (this repo only). For channel=stable, must be `main` (see workflow guard). Prerelease may use other branches/SHAs.
+        description: Git ref to checkout (this repo only). For channel=stable, must be `main` (see workflow guard). dev/rc may use other branches/SHAs.
         type: string
         default: main
       confirm_stable_version:
@@ -52,6 +76,7 @@ on:
 
 permissions:
   contents: read
+  actions: write
 
 # One publish run at a time (manual); avoids overlapping uploads / environment reviews.
 concurrency:
@@ -105,11 +130,13 @@ jobs:
 
       - name: Resolve publish version
         id: meta
+        env:
+          CHANNEL: ${{ inputs.channel }}
+          RUN_ID: ${{ inputs.channel == 'dev' && github.run_id || '' }}
+          RC_NUMBER: ${{ inputs.channel == 'rc' && inputs.rc_number || '' }}
         run: |
           set -euo pipefail
-          V="$(cargo xtask publish resolve \
-            --channel "${{ inputs.channel }}" \
-            --run-id "${{ github.run_id }}")"
+          V="$(cargo xtask publish resolve --channel "${CHANNEL}" --run-id "${RUN_ID}" --rc-number "${RC_NUMBER}")"
           echo "publish_version=${V}" >> "${GITHUB_OUTPUT}"
 
       - name: Confirm stable version (type-to-confirm)
@@ -128,22 +155,35 @@ jobs:
             exit 1
           fi
 
-      - name: Apply prerelease version to Cargo.toml (runner only)
-        if: inputs.channel == 'prerelease'
+      - name: Apply dev/rc version to Cargo.toml (runner only)
+        if: inputs.channel == 'dev' || inputs.channel == 'rc'
+        env:
+          CHANNEL: ${{ inputs.channel }}
+          RUN_ID: ${{ inputs.channel == 'dev' && github.run_id || '' }}
+          RC_NUMBER: ${{ inputs.channel == 'rc' && inputs.rc_number || '' }}
         run: |
           set -euo pipefail
-          cargo xtask publish apply-prerelease --run-id "${{ github.run_id }}"
+          cargo xtask publish apply-version --channel "${CHANNEL}" --run-id "${RUN_ID}" --rc-number "${RC_NUMBER}"
 
-      - name: Regenerate Cargo.lock after version bump (prerelease only)
-        if: inputs.channel == 'prerelease'
+      - name: Regenerate Cargo.lock after version bump (dev/rc only)
+        if: inputs.channel == 'dev' || inputs.channel == 'rc'
         run: |
           set -euo pipefail
           cargo generate-lockfile
 
+      - name: Upload Cargo.toml snapshots (debugging)
+        uses: actions/upload-artifact@v4
+        with:
+          name: publish-cargo-toml-${{ inputs.channel }}-${{ github.run_id }}-${{ github.run_attempt }}-verify
+          path: |
+            Cargo.toml
+            buf-tools/Cargo.toml
+            buf-toolchain/Cargo.toml
+
       - name: Set BUF_EXPECT_VERSION for build.rs / smoke tests
         run: |
           set -euo pipefail
-          if [ "${{ inputs.channel }}" = "prerelease" ]; then
+          if [ "${{ inputs.channel }}" = "dev" ] || [ "${{ inputs.channel }}" = "rc" ]; then
             CORE="$(cargo xtask publish workspace-core)"
             echo "BUF_EXPECT_VERSION=${CORE}" >> "${GITHUB_ENV}"
           else
@@ -154,7 +194,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "${BUF_RS_CACHE_DIR}"
-          if [ "${{ inputs.channel }}" = "prerelease" ]; then
+          if [ "${{ inputs.channel }}" = "dev" ] || [ "${{ inputs.channel }}" = "rc" ]; then
             cargo publish -p buf-tools --dry-run --locked --allow-dirty
             cargo publish -p buf-toolchain --dry-run --locked --allow-dirty
           else
@@ -165,19 +205,20 @@ jobs:
       - name: Job summary
         env:
           HAVE_CRATES_TOKEN: ${{ steps.token_gate.outputs.have }}
-          PUBLISH_VERSION: ${{ steps.meta.outputs.publish_version }}
           CHANNEL: ${{ inputs.channel }}
           REF: ${{ inputs.ref }}
         run: |
           set -euo pipefail
           HEAD_SHA="$(git rev-parse HEAD)"
+          VER="$(bash .github/ci-scripts/read-workspace-version.sh)"
           {
             echo "## Publish verify"
             echo "- **Channel:** ${CHANNEL}"
             echo "- **Checkout ref (input):** ${REF}"
             echo "- **Commit:** \`${HEAD_SHA}\`"
             echo "- **Workflow dispatch ref:** \`${{ github.ref }}\`"
-            echo "- **Resolved version:** \`${PUBLISH_VERSION}\` (both **buf-tools** and **buf-toolchain**)"
+            echo ""
+            cargo xtask publish verify-summary --crates-version "${VER}"
             echo ""
             if [ "${HAVE_CRATES_TOKEN}" = "true" ]; then
               echo "Upload job uses environment **crates-io-publish**. If that environment has **Required reviewers** (public repos on Free/Pro/Team), the run waits for approval; with no protection rules, upload starts right after verify."
@@ -228,22 +269,35 @@ jobs:
               ;;
           esac
 
-      - name: Apply prerelease version to Cargo.toml (runner only)
-        if: inputs.channel == 'prerelease'
+      - name: Apply dev/rc version to Cargo.toml (runner only)
+        if: inputs.channel == 'dev' || inputs.channel == 'rc'
+        env:
+          CHANNEL: ${{ inputs.channel }}
+          RUN_ID: ${{ inputs.channel == 'dev' && github.run_id || '' }}
+          RC_NUMBER: ${{ inputs.channel == 'rc' && inputs.rc_number || '' }}
         run: |
           set -euo pipefail
-          cargo xtask publish apply-prerelease --run-id "${{ github.run_id }}"
+          cargo xtask publish apply-version --channel "${CHANNEL}" --run-id "${RUN_ID}" --rc-number "${RC_NUMBER}"
 
-      - name: Regenerate Cargo.lock after version bump (prerelease only)
-        if: inputs.channel == 'prerelease'
+      - name: Regenerate Cargo.lock after version bump (dev/rc only)
+        if: inputs.channel == 'dev' || inputs.channel == 'rc'
         run: |
           set -euo pipefail
           cargo generate-lockfile
 
+      - name: Upload Cargo.toml snapshots (debugging)
+        uses: actions/upload-artifact@v4
+        with:
+          name: publish-cargo-toml-${{ inputs.channel }}-${{ github.run_id }}-${{ github.run_attempt }}-upload
+          path: |
+            Cargo.toml
+            buf-tools/Cargo.toml
+            buf-toolchain/Cargo.toml
+
       - name: Set BUF_EXPECT_VERSION
         run: |
           set -euo pipefail
-          if [ "${{ inputs.channel }}" = "prerelease" ]; then
+          if [ "${{ inputs.channel }}" = "dev" ] || [ "${{ inputs.channel }}" = "rc" ]; then
             CORE="$(cargo xtask publish workspace-core)"
             echo "BUF_EXPECT_VERSION=${CORE}" >> "${GITHUB_ENV}"
           else
@@ -255,7 +309,7 @@ jobs:
           set -euo pipefail
           mkdir -p "${BUF_RS_CACHE_DIR}"
           FLAGS=(--locked)
-          if [ "${{ inputs.channel }}" = "prerelease" ]; then
+          if [ "${{ inputs.channel }}" = "dev" ] || [ "${{ inputs.channel }}" = "rc" ]; then
             FLAGS+=(--allow-dirty)
           fi
           cargo publish -p buf-tools "${FLAGS[@]}"

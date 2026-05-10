@@ -1,10 +1,18 @@
 //! `cargo xtask` — workspace automation (see `.cargo/config.toml`).
+//!
+//! **Buf upstream version:** The rule `major.minor.patch` from the crate semver (ignoring
+//! pre-release / build metadata) must stay aligned with
+//! `buf-tools/build.rs` and `buf-toolchain/build.rs` (`CARGO_PKG_VERSION` → GitHub tag `vX.Y.Z`).
+
+mod publish_inputs;
 
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::exit;
 
 use clap::{Parser, Subcommand};
+use publish_inputs::{PublishChannel, ResolvedPublishFlags, resolve_flags};
+use semver::Version;
 use toml_edit::{DocumentMut, Item, Value};
 
 #[derive(Parser)]
@@ -26,26 +34,32 @@ enum Command {
 #[derive(Subcommand)]
 enum PublishCmd {
     /// Print the version that would be published (no file writes).
+    ///
+    /// Pass `--run-id` / `--rc-number` as empty strings when unused; see `publish_inputs::resolve_flags`.
     Resolve {
         #[arg(long)]
         channel: PublishChannel,
-        /// For prerelease; defaults to `GITHUB_RUN_ID`.
-        #[arg(long)]
-        run_id: Option<String>,
+        #[arg(long, default_value = "")]
+        run_id: String,
+        #[arg(long, default_value = "")]
+        rc_number: String,
     },
-    /// Set `[workspace.package].version` and workspace dependency pins to `{core}-rc.RUN_ID`.
-    ApplyPrerelease {
+    /// Set `[workspace.package].version` and workspace dependency pins (dev: `-test.RUN_ID`, rc: `-rc.N`).
+    ApplyVersion {
         #[arg(long)]
-        run_id: Option<String>,
+        channel: PublishChannel,
+        #[arg(long, default_value = "")]
+        run_id: String,
+        #[arg(long, default_value = "")]
+        rc_number: String,
     },
     /// Print Buf **core** `X.Y.Z` from the current `[workspace.package].version` (for `BUF_EXPECT_VERSION`).
     WorkspaceCore,
-}
-
-#[derive(Clone, Copy, clap::ValueEnum)]
-enum PublishChannel {
-    Prerelease,
-    Stable,
+    /// Emit Markdown for `GITHUB_STEP_SUMMARY`: crate semver breakdown + resolved Buf versions.
+    VerifySummary {
+        #[arg(long)]
+        crates_version: String,
+    },
 }
 
 fn root_manifest() -> PathBuf {
@@ -87,23 +101,34 @@ fn semver_core(v: &str) -> String {
     base.split('-').next().unwrap_or(base).to_string()
 }
 
-fn is_stable_plain(v: &str) -> bool {
-    if v.contains('+') || v.contains('-') {
-        return false;
+/// Parsed semver must match this for `stable` channel (no pre-release, no build metadata).
+fn assert_stable_plain_semver(raw: &str) {
+    let v = Version::parse(raw).unwrap_or_else(|e| {
+        eprintln!("xtask: stable channel: invalid semver in workspace {raw:?}: {e}");
+        exit(1);
+    });
+    if !v.pre.is_empty() || !v.build.is_empty() {
+        eprintln!(
+            "xtask: stable publish requires plain X.Y.Z (no pre-release or build metadata), got {raw:?}"
+        );
+        exit(1);
     }
-    let parts: Vec<&str> = v.split('.').collect();
-    if parts.len() != 3 {
-        return false;
-    }
-    parts
-        .iter()
-        .all(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_digit()))
 }
 
-fn apply_prerelease(path: &Path, run_id: &str) -> String {
-    let raw = read_workspace_version(path);
-    let core = semver_core(&raw);
-    let new_ver = format!("{core}-rc.{run_id}");
+fn must_parse_version(label: &str, s: &str) -> Version {
+    Version::parse(s).unwrap_or_else(|e| {
+        eprintln!("xtask: {label}: invalid semver {s:?}: {e}");
+        exit(1);
+    })
+}
+
+/// Buf GitHub release tag core — keep in sync with `buf-tools/build.rs` and `buf-toolchain/build.rs`.
+fn buf_upstream_core(v: &Version) -> String {
+    format!("{}.{}.{}", v.major, v.minor, v.patch)
+}
+
+fn apply_bumped_version(path: &Path, new_ver: &str) {
+    let _ = must_parse_version("apply-version", new_ver);
 
     let text = fs::read_to_string(path).unwrap_or_else(|e| {
         eprintln!("xtask: read {}: {e}", path.display());
@@ -114,7 +139,7 @@ fn apply_prerelease(path: &Path, run_id: &str) -> String {
         exit(1);
     });
 
-    doc["workspace"]["package"]["version"] = Item::Value(Value::from(new_ver.as_str()));
+    doc["workspace"]["package"]["version"] = Item::Value(Value::from(new_ver));
 
     for pkg in ["buf-tools", "buf-toolchain"] {
         let item = &mut doc["workspace"]["dependencies"][pkg];
@@ -136,56 +161,118 @@ fn apply_prerelease(path: &Path, run_id: &str) -> String {
         eprintln!("xtask: write {}: {e}", path.display());
         exit(1);
     });
+}
 
-    new_ver
+fn emit_verify_summary(crates_version: &str) {
+    let v = must_parse_version("verify-summary --crates-version", crates_version);
+    let buf_core = buf_upstream_core(&v);
+
+    let pre = if v.pre.is_empty() {
+        "(none)".to_string()
+    } else {
+        v.pre.to_string()
+    };
+    let build = if v.build.is_empty() {
+        "(none)".to_string()
+    } else {
+        v.build.to_string()
+    };
+
+    println!("### Crates Resolved Version");
+    println!("`{crates_version}`");
+    println!("- **major:** {}", v.major);
+    println!("- **minor:** {}", v.minor);
+    println!("- **patch:** {}", v.patch);
+    println!("- **pre-release:** {pre}");
+    println!("- **build metadata:** {build}");
+    println!();
+    println!(
+        "- **resolved buf for buf-tools:** `{buf_core}` (Buf GitHub tag `v{buf_core}`; same rule as `buf-tools/build.rs` — `CARGO_PKG_VERSION` parsed with `semver::Version`, then `major.minor.patch`)."
+    );
+    println!(
+        "- **resolved buf for buf-toolchain:** `{buf_core}` (same rule as `buf-toolchain/build.rs`)."
+    );
+    println!();
+    println!(
+        "> Crate **pre-release** segments (e.g. `-rc.2`, `-test.123`) are for buf-rs packaging only; they do **not** select a Buf pre-release. **`build.rs`** always downloads the stable Buf release **`v{buf_core}`** for that core."
+    );
 }
 
 fn main() {
+    let _ =
+        env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("xtask=warn"))
+            .format_timestamp(None)
+            .try_init();
+
     let cli = Cli::parse();
     let path = root_manifest();
 
     match cli.command {
         Command::Publish { cmd } => match cmd {
-            PublishCmd::Resolve { channel, run_id } => {
+            PublishCmd::Resolve {
+                channel,
+                run_id,
+                rc_number,
+            } => {
+                let flags = resolve_flags(channel, &run_id, &rc_number).unwrap_or_else(|e| {
+                    eprintln!("xtask: {e}");
+                    exit(1);
+                });
                 let raw = read_workspace_version(&path);
-                match channel {
-                    PublishChannel::Stable => {
-                        if !is_stable_plain(&raw) {
-                            eprintln!(
-                                "stable publish requires plain X.Y.Z in [workspace.package].version, got {raw:?}"
-                            );
-                            exit(1);
-                        }
+                match flags {
+                    ResolvedPublishFlags::Stable => {
+                        assert_stable_plain_semver(&raw);
                         println!("{raw}");
                     }
-                    PublishChannel::Prerelease => {
-                        let run_id = run_id
-                            .or_else(|| std::env::var("GITHUB_RUN_ID").ok())
-                            .filter(|s| !s.is_empty())
-                            .unwrap_or_else(|| {
-                                eprintln!("prerelease: pass --run-id or set GITHUB_RUN_ID");
-                                exit(1);
-                            });
+                    ResolvedPublishFlags::Dev { run_id } => {
                         let core = semver_core(&raw);
-                        println!("{core}-rc.{run_id}");
+                        let out = format!("{core}-test.{run_id}");
+                        let _ = must_parse_version("resolve (dev)", &out);
+                        println!("{out}");
+                    }
+                    ResolvedPublishFlags::Rc { rc_number: n } => {
+                        let core = semver_core(&raw);
+                        let out = format!("{core}-rc.{n}");
+                        let _ = must_parse_version("resolve (rc)", &out);
+                        println!("{out}");
                     }
                 }
             }
-            PublishCmd::ApplyPrerelease { run_id } => {
-                let run_id = run_id
-                    .or_else(|| std::env::var("GITHUB_RUN_ID").ok())
-                    .filter(|s| !s.is_empty())
-                    .unwrap_or_else(|| {
-                        eprintln!("apply-prerelease: pass --run-id or set GITHUB_RUN_ID");
+            PublishCmd::ApplyVersion {
+                channel,
+                run_id,
+                rc_number,
+            } => {
+                let flags = resolve_flags(channel, &run_id, &rc_number).unwrap_or_else(|e| {
+                    eprintln!("xtask: {e}");
+                    exit(1);
+                });
+                let raw = read_workspace_version(&path);
+                let new_ver = match flags {
+                    ResolvedPublishFlags::Stable => {
+                        eprintln!("xtask: apply-version: channel must be dev or rc");
                         exit(1);
-                    });
-                let new_ver = apply_prerelease(&path, &run_id);
+                    }
+                    ResolvedPublishFlags::Dev { run_id } => {
+                        let core = semver_core(&raw);
+                        format!("{core}-test.{run_id}")
+                    }
+                    ResolvedPublishFlags::Rc { rc_number: n } => {
+                        let core = semver_core(&raw);
+                        format!("{core}-rc.{n}")
+                    }
+                };
+                let _ = must_parse_version("apply-version", &new_ver);
+                apply_bumped_version(&path, &new_ver);
                 println!("{new_ver}");
             }
             PublishCmd::WorkspaceCore => {
                 let raw = read_workspace_version(&path);
                 let core = semver_core(&raw);
                 println!("{core}");
+            }
+            PublishCmd::VerifySummary { crates_version } => {
+                emit_verify_summary(&crates_version);
             }
         },
     }
