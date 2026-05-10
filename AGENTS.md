@@ -11,10 +11,10 @@ Concise rules for coding agents. User-facing commands stay in [`README.md`](READ
    the root [`Cargo.toml`](Cargo.toml), and what you publish to crates.io.
 
 For **canary** publishes, crate semver must **not** equal the final stable slot
-(`1.69.0`) until you intentionally ship stable. CI and the manual workflow use
-**`1.69.0-rc.<github.run_id>`** (unique per Actions run). Older examples such as
-`1.69.0-rc.<n>.tools.testing` are equivalent in intent: never burn the stable
-slot until you intentionally ship stable.
+(`1.69.0`) until you intentionally ship stable. The manual publish workflow defaults to
+**`dev`**: **`{core}-test.<github.run_id>`** (pipeline validation). Use **`rc`** with
+**`rc_number`** for **`{core}-rc.N`** when testing with others. Never burn the stable
+slot until you intentionally ship **`stable`**.
 
 **Crate semver tracks the Buf binary, not an independent series.** The
 **core** semver (before any `-` pre-release) **MUST** match the upstream Buf release
@@ -76,18 +76,29 @@ Documentation that must stay in sync when keys/preference/precedence change:
   the repo is **public**, add the secret and optionally **Required reviewers** on **`crates-io-publish`**
   (Free/Pro/Team: [public repos only](https://docs.github.com/en/actions/reference/deployments-and-environments#required-reviewers))
   for a pause before **`upload`**.
-- **Pre-release (default):** bumps workspace version on the runner to **`{core}-rc.${{ github.run_id }}`**,
-  runs **`cargo generate-lockfile`**, then **`cargo publish --allow-dirty --locked`** (ephemeral
-  `Cargo.toml` / `Cargo.lock` changes are **not** committed to git).
-- **Stable:** requires **`channel=stable`**, dispatch from **`main`**, **`inputs.ref`** set to **`main`** (guards
-  against dispatching from **`main`** while checking out another ref), and **`confirm_stable_version`**
-  matching **`[workspace.package].version`**; no `--allow-dirty`; no in-runner version bump. Use **prerelease**
-  to exercise non-**`main`** refs.
+- **Channels:** **`dev`** (default) → **`{core}-test.<run_id>`**; **`rc`** → **`{core}-rc.<rc_number>`**
+  (**`rc_number`** input, integer > 0); **`stable`** → committed **`X.Y.Z`** only. **`dev`** / **`rc`**
+  run **`cargo xtask publish apply-version`**, **`cargo generate-lockfile`**, then
+  **`cargo publish --allow-dirty --locked`** (ephemeral `Cargo.toml` / `Cargo.lock`, not committed).
+- **Stable:** requires **`channel=stable`**, dispatch from **`main`**, **`inputs.ref`** set to **`main`**, and
+  **`confirm_stable_version`** matching **`[workspace.package].version`**; no **`--allow-dirty`**; no
+  in-runner version bump. Use **`dev`** or **`rc`** to exercise non-**`main`** refs.
+- **Crate pre-release vs Buf binary:** Crate versions may include **`-test.*`** or **`-rc.*`** for buf-rs
+  packaging only. **`build.rs`** still downloads the **stable** Buf GitHub release **`v{major}.{minor}.{patch}`**
+  from **`CARGO_PKG_VERSION`** (see **`buf-tools/build.rs`** / **`buf-toolchain/build.rs`**). The verify job
+  summary prints **resolved buf for buf-tools** and **resolved buf for buf-toolchain** via
+  **`cargo xtask publish verify-summary`** (uses the **`semver`** crate); that output must stay aligned
+  with both **`build.rs`** files.
+- **Maintainer priority:** When changing publish/versioning or the verify summary, update **`xtask`**
+  (`verify-summary`, **`resolve`**, **`apply-version`**), the **workflow YAML header comments** (source-of-truth
+  block), and—if the rule changes—**`buf-tools/build.rs`** and **`buf-toolchain/build.rs`** together.
+- **Artifacts:** Each job uploads **`Cargo.toml`**, **`buf-tools/Cargo.toml`**, and **`buf-toolchain/Cargo.toml`**
+  for debugging (requires **`permissions.actions: write`** on the workflow).
 - **Upload skipped (green run):** if **`CRATES_IO_TOKEN`** is unset, **`upload`** is skipped — safe for
   private repos and dry testing. Remove the **`upload`** job’s **`if:`** gate (see TEMP comment in the
   YAML) once the token is always configured.
-- **Publish version bumps:** [`xtask`](xtask/) — **`cargo xtask publish resolve`**, **`apply-prerelease`**,
-  **`workspace-core`** (alias in [`.cargo/config.toml`](.cargo/config.toml); uses **`--locked`**).
+- **Publish helpers:** [`xtask`](xtask/) — **`cargo xtask publish resolve`**, **`apply-version`**,
+  **`workspace-core`**, **`verify-summary`** (alias in [`.cargo/config.toml`](.cargo/config.toml); uses **`--locked`**).
 
 ### GitHub settings (before upload works)
 
@@ -99,7 +110,8 @@ Documentation that must stay in sync when keys/preference/precedence change:
    **`upload`** ([public only on Free/Pro/Team](https://docs.github.com/en/actions/reference/deployments-and-environments#required-reviewers)).
    Optional: **Deployment branches / tags** (e.g. **`main`** only — [Pro/Team private](https://docs.github.com/en/actions/reference/deployments-and-environments#deployment-branches-and-tags)).
    With no reviewer rule, **`upload`** runs immediately after **`verify`** once the token is set.
-3. **Actions:** enabled; workflow default read-only permissions.
+3. **Actions:** enabled; **`publish-crates.yml`** uses **`contents: read`** and **`actions: write`**
+  (artifact uploads). Other workflows may stay read-only for contents.
 
 Local one-off: **`cargo publish -p buf-tools`** / **`buf-toolchain`** from a clean tree after
 **`cargo publish -p … --dry-run`**.
