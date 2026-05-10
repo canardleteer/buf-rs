@@ -68,12 +68,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6.0.2
 
-      # Install stable Rust with formatting and lint components for this job only.
-      - name: Install Rust toolchain (stable, rustfmt, clippy)
+      # Bootstrap rustup; channel + components come from repo-root rust-toolchain.toml (single source of truth).
+      - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: stable
-          components: rustfmt, clippy
 
       # Run fmt check, clippy, workspace tests, then buf_lint + protoc_with_buf_plugins.
       - name: Run workspace CI script

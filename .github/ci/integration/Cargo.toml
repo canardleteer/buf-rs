@@ -1,0 +1,29 @@
+# Integration-only standalone crate (mirrors examples/ for Docker post-publish smoke).
+# Sync with examples/Cargo.toml and root [workspace.package] when those change — see AGENTS.md.
+#
+# protoc-bin-vendored: align version with examples/Cargo.toml [dependencies]
+# edition: align with [workspace.package].edition in root Cargo.toml (examples use edition.workspace)
+# [[example]]: align names/paths with examples/Cargo.toml
+# license: align with [workspace.package].license when publishing metadata matters (here publish = false)
+
+[package]
+name = "buf-tools-examples-integration"
+version = "0.0.0"
+edition = "2024"
+license = "MIT"
+publish = false
+
+[dependencies]
+# Pin aligned from examples/Cargo.toml — same key/version as the examples crate.
+protoc-bin-vendored = "3"
+
+# buf-tools is injected at container runtime:
+#   cargo add buf-tools@=${TEST_CRATE_VERSION}
+
+[[example]]
+name = "buf_lint"
+path = "buf_lint.rs"
+
+[[example]]
+name = "protoc_with_buf_plugins"
+path = "protoc_with_buf_plugins.rs"

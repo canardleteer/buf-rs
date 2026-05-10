@@ -243,6 +243,27 @@ cargo test --workspace --locked
   root `Cargo.toml`.
 - You can set `BUF_EXPECT_VERSION` manually instead if you prefer.
 
+### Post-publish testing
+
+After a version is on crates.io, you can run the same **registry-only** smoke
+the manual publish workflow uses (minimal Docker context, no workspace `path`
+deps): [`.github/ci-scripts/run-integration-docker.sh`](.github/ci-scripts/run-integration-docker.sh)
+stages [`rust-toolchain.toml`](rust-toolchain.toml), the integration manifest
+under [`.github/ci/integration/`](.github/ci/integration/), and mirrored
+[`examples/`](examples/) sources, then builds an image and runs the integration
+entrypoint (`cargo add buf-tools`, `cargo install buf-toolchain`, `buf --version`
+vs crate semver core, `buf build` for the example baseline, both examples).
+
+`TEST_CRATE_VERSION` must be a **published** semver (whatever you just shipped),
+not only the value in `Cargo.toml`:
+
+```bash
+TEST_CRATE_VERSION=1.41.0-rc.1 bash .github/ci-scripts/run-integration-docker.sh
+```
+
+Or pass the same string as the first argument. Requires Docker (default) or set
+`DOCKER=podman`. More detail: [`.github/ci/integration/README.md`](.github/ci/integration/README.md).
+
 ## License
 
 Rust sources in this repository are licensed under the MIT license — see
