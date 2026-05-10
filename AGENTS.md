@@ -116,6 +116,7 @@ Documentation that must stay in sync when keys/preference/precedence change:
 - **Maintainer priority:** When changing publish/versioning or the verify summary, update **`xtask`**
   (`verify-summary`, **`resolve`**, **`apply-version`**), the **workflow YAML header comments** (source-of-truth
   block), and—if the rule changes—**`buf-tools/build.rs`** and **`buf-toolchain/build.rs`** together.
+- **Post-publish integration:** After **`upload`** succeeds, job **`post-publish-integration`** builds **`.github/ci/integration/`**’s Docker image (staged context: repo **`rust-toolchain.toml`**, integration **`Cargo.toml`** / **`Dockerfile`** / **`entrypoint.sh`**, mirrored **`examples/`** sources — **no** workspace root) and runs **`cargo add buf-tools`**, **`cargo install buf-toolchain`**, **`buf --version`** vs crate semver core, **`buf build`** baseline, then both examples. Failure **fails the workflow**. **`verify`** exposes **`publish_version`** for **`TEST_CRATE_VERSION`**. Skipped when **`upload`** is skipped (no token).
 - **Artifacts:** Each job uploads **`Cargo.toml`**, **`buf-tools/Cargo.toml`**, and **`buf-toolchain/Cargo.toml`**
   for debugging (requires **`permissions.actions: write`** on the workflow).
 - **Upload skipped (green run):** if **`verify`** does not see **`CRATES_IO_TOKEN`**, **`upload`** is
@@ -170,6 +171,23 @@ Local one-off: **`cargo publish -p buf-tools`** / **`buf-toolchain`** from a cle
   **`cargo publish -p buf-tools --dry-run --locked`** and **`buf-toolchain`** (no token; packaging gate).
 - **Publish:** [`.github/workflows/publish-crates.yml`](.github/workflows/publish-crates.yml) — manual only
   (see **Publishing** above).
+
+## `rust-toolchain.toml` (pinned Rust toolchain)
+
+The repo root **[`rust-toolchain.toml`](rust-toolchain.toml)** sets **`channel`** to an **explicit stable release** (e.g. **`1.95.0`**) — not the bare **`stable`** channel string — so resolution is reproducible. **Today’s pin is `1.95.0` because that is the current latest stable** on **[releases.rs](https://releases.rs)**; as new stables ship, maintainers should **bump `channel` (and aligned bits below) to track latest stable**, unless the project **deliberately** stays on an older compiler (document that choice).
+
+**Whenever you edit [`rust-toolchain.toml`](rust-toolchain.toml)** — bump, tweak **`components`**, or otherwise touch the file — **check [releases.rs](https://releases.rs)** so you know whether you are staying on **latest stable**, intentionally behind, or intentionally pinning a specific release for another reason.
+
+**`components`** (e.g. **`rustfmt`**, **`clippy`**) live in that file too. GitHub Actions uses **`dtolnay/rust-toolchain@stable`** **without** duplicate **`toolchain:`** / **`components:`** inputs; rustup applies the workspace **`rust-toolchain.toml`** when **`cargo`** / **`rustc`** run in the repo.
+
+Keep these aligned on the **same Rust release line** when you bump the pin:
+
+- **`rust-toolchain.toml`** **`channel`** (and **`components`**)
+- **Integration Docker base:** **`Dockerfile`** **`ARG RUST_DOCKER_TAG`** → **`FROM rust:${RUST_DOCKER_TAG}`**. CI and **[`.github/ci-scripts/run-integration-docker.sh`](.github/ci-scripts/run-integration-docker.sh)** pass **`RUST_DOCKER_TAG="$(bash .github/ci-scripts/rust-docker-tag-from-toolchain.sh rust-toolchain.toml)"`** (maps **`channel = "X.Y.Z"`** → **`X.Y-slim-bookworm`**; Docker Hub has no **`X.Y.Z`** patch tags on **`library/rust`**). Bumping **`[toolchain].channel`** updates the build-arg automatically; GHA layer cache invalidates when **`rust-toolchain.toml`** / **`Dockerfile`** / context change.
+
+## Post-publish Docker integration (`.github/ci/integration/`)
+
+Registry-only smoke test after a successful **`upload`** (see **Publishing** → **Post-publish integration**). **Whenever you edit [`examples/Cargo.toml`](examples/Cargo.toml)** (deps, **`[[example]]`**, paths, **`edition.workspace`** / metadata), update the integration scaffold **[`.github/ci/integration/Cargo.toml`](.github/ci/integration/Cargo.toml)** next to the **`Dockerfile`**, and adjust **[`.github/ci/integration/README.md`](.github/ci/integration/README.md)** / **`COPY`** lists if paths change. Local smoke: **[`.github/ci-scripts/run-integration-docker.sh`](.github/ci-scripts/run-integration-docker.sh)** (same staging as CI).
 
 ## Linting
 

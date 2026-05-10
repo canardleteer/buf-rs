@@ -96,6 +96,8 @@ jobs:
     outputs:
       # Job-level `if` on dependent jobs may not use `secrets`; pass through from a step instead.
       have_crates_token: ${{ steps.token_gate.outputs.have }}
+      # Full crates.io semver used by post-publish Docker integration (`cargo add` / `cargo install`).
+      publish_version: ${{ steps.meta.outputs.publish_version }}
     env:
       BUF_RS_CACHE_DIR: ${{ github.workspace }}/target/buf-rs-cache
     steps:
@@ -108,6 +110,7 @@ jobs:
         id: token_gate
         run: echo "have=${{ secrets.CRATES_IO_TOKEN != '' }}" >> "${GITHUB_OUTPUT}"
 
+      # Bootstrap rustup; channel + components come from repo-root rust-toolchain.toml.
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
@@ -252,6 +255,7 @@ jobs:
         with:
           ref: ${{ inputs.ref }}
 
+      # Bootstrap rustup; channel + components come from repo-root rust-toolchain.toml.
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
@@ -322,3 +326,62 @@ jobs:
           fi
           cargo publish -p buf-tools "${FLAGS[@]}"
           cargo publish -p buf-toolchain "${FLAGS[@]}"
+
+  post-publish-integration:
+    name: post-publish integration (Docker)
+    needs:
+      - verify
+      - upload
+    if: ${{ needs.upload.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      TEST_CRATE_VERSION: ${{ needs.verify.outputs.publish_version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6.0.2
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Stage integration Docker context
+        id: stage
+        run: |
+          set -euo pipefail
+          CTX="${RUNNER_TEMP}/integration-context"
+          rm -rf "${CTX}"
+          mkdir -p "${CTX}/proto"
+          cp rust-toolchain.toml "${CTX}/"
+          cp .github/ci/integration/Cargo.toml \
+            .github/ci/integration/Dockerfile \
+            .github/ci/integration/entrypoint.sh \
+            "${CTX}/"
+          chmod +x "${CTX}/entrypoint.sh"
+          cp examples/buf_lint.rs examples/protoc_with_buf_plugins.rs "${CTX}/"
+          cp -r examples/proto/* "${CTX}/proto/"
+          echo "context=${CTX}" >> "${GITHUB_OUTPUT}"
+
+      - name: Rust Docker tag from rust-toolchain.toml
+        id: rust_docker_tag
+        run: |
+          set -euo pipefail
+          TAG="$(bash .github/ci-scripts/rust-docker-tag-from-toolchain.sh rust-toolchain.toml)"
+          echo "tag=${TAG}" >> "${GITHUB_OUTPUT}"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build integration image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ steps.stage.outputs.context }}
+          push: false
+          load: true
+          tags: buf-rs-integration:ci
+          build-args: RUST_DOCKER_TAG=${{ steps.rust_docker_tag.outputs.tag }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run integration container
+        run: |
+          set -euo pipefail
+          docker run --rm -e "TEST_CRATE_VERSION=${TEST_CRATE_VERSION}" buf-rs-integration:ci
