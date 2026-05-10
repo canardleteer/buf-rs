@@ -1,0 +1,262 @@
+# =============================================================================
+# Manual crates.io publish — buf-tools + buf-toolchain
+#
+# --- GitHub settings prerequisites (do this before the pipeline can upload) ---
+#
+# 1) Secret (repository or environment-scoped)
+#    - Settings → Secrets and variables → Actions → New repository secret
+#    - Name: CRATES_IO_TOKEN
+#    - Value: crates.io API token with publish rights for buf-tools and buf-toolchain
+#    While the repository is **private**, you can omit this secret so **`upload`** never runs (only
+#    **`verify`** / dry-run). After the repo is **public**, add the secret and use the environment
+#    gate below if you want a manual approval step before upload.
+#
+# 2) Environment (approval gate + secret scope for upload, once you publish from CI)
+#    - Settings → Environments → New environment → name: crates-io-publish → Configure environment
+#    - Under **Deployment protection rules**, add **Required reviewers** if you want the upload job
+#      to pause for approval after verify. On GitHub Free / Pro / Team this exists only for **public**
+#      repositories (see https://docs.github.com/en/actions/reference/deployments-and-environments#required-reviewers ).
+#    - Optional: **Deployment branches and tags** (e.g. main only) — see GitHub docs for your plan.
+#
+# 3) Actions
+#    - Settings → Actions → General: enable Actions; workflow permissions read-only
+#
+# Upload is skipped (job skipped, workflow green) when CRATES_IO_TOKEN is unset —
+# safe for dry testing. Remove the TEMP "if:" line on the upload job when the
+# token is always configured (see comment on that job).
+#
+# Prerelease path: `cargo xtask publish apply-prerelease`, then `cargo generate-lockfile`, then
+# publish with --allow-dirty --locked (changes are never committed). See xtask/ + .cargo/config.toml.
+#
+# =============================================================================
+name: publish-crates
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: prerelease (default) appends -rc.RUN_ID; stable uses committed X.Y.Z only
+        type: choice
+        default: prerelease
+        options:
+          - prerelease
+          - stable
+      ref:
+        description: Git ref to checkout (this repo only). For channel=stable, must be `main` (see workflow guard). Prerelease may use other branches/SHAs.
+        type: string
+        default: main
+      confirm_stable_version:
+        description: For channel=stable — type the exact X.Y.Z from Cargo.toml (required)
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+# One publish run at a time (manual); avoids overlapping uploads / environment reviews.
+concurrency:
+  group: publish-crates-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: verify (dry-run)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      # Job-level `if` on dependent jobs may not use `secrets`; pass through from a step instead.
+      have_crates_token: ${{ steps.token_gate.outputs.have }}
+    env:
+      BUF_RS_CACHE_DIR: ${{ github.workspace }}/target/buf-rs-cache
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6.0.2
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Record whether CRATES_IO_TOKEN is set (for upload job gate)
+        id: token_gate
+        run: echo "have=${{ secrets.CRATES_IO_TOKEN != '' }}" >> "${GITHUB_OUTPUT}"
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Stable publish only from main
+        if: inputs.channel == 'stable'
+        run: |
+          set -euo pipefail
+          if [ "${{ github.ref }}" != "refs/heads/main" ]; then
+            echo "::error::Stable publish must be dispatched from the main branch (github.ref=${{ github.ref }})."
+            exit 1
+          fi
+
+      - name: Stable checkout ref must be main
+        if: inputs.channel == 'stable'
+        run: |
+          set -euo pipefail
+          REF="${{ inputs.ref }}"
+          case "${REF}" in
+            main|refs/heads/main) ;;
+            *)
+              echo "::error::Stable publish: inputs.ref must be main (got '${REF}'). Otherwise you can dispatch from main while checking out a different ref."
+              exit 1
+              ;;
+          esac
+
+      - name: Resolve publish version
+        id: meta
+        run: |
+          set -euo pipefail
+          V="$(cargo xtask publish resolve \
+            --channel "${{ inputs.channel }}" \
+            --run-id "${{ github.run_id }}")"
+          echo "publish_version=${V}" >> "${GITHUB_OUTPUT}"
+
+      - name: Confirm stable version (type-to-confirm)
+        if: inputs.channel == 'stable'
+        env:
+          EXPECT: ${{ steps.meta.outputs.publish_version }}
+          GOT: ${{ inputs.confirm_stable_version }}
+        run: |
+          set -euo pipefail
+          if [ -z "${GOT}" ]; then
+            echo "::error::confirm_stable_version is required when channel=stable (type the exact X.Y.Z)."
+            exit 1
+          fi
+          if [ "${GOT}" != "${EXPECT}" ]; then
+            echo "::error::confirm_stable_version must equal workspace version ${EXPECT} (got '${GOT}')."
+            exit 1
+          fi
+
+      - name: Apply prerelease version to Cargo.toml (runner only)
+        if: inputs.channel == 'prerelease'
+        run: |
+          set -euo pipefail
+          cargo xtask publish apply-prerelease --run-id "${{ github.run_id }}"
+
+      - name: Regenerate Cargo.lock after version bump (prerelease only)
+        if: inputs.channel == 'prerelease'
+        run: |
+          set -euo pipefail
+          cargo generate-lockfile
+
+      - name: Set BUF_EXPECT_VERSION for build.rs / smoke tests
+        run: |
+          set -euo pipefail
+          if [ "${{ inputs.channel }}" = "prerelease" ]; then
+            CORE="$(cargo xtask publish workspace-core)"
+            echo "BUF_EXPECT_VERSION=${CORE}" >> "${GITHUB_ENV}"
+          else
+            echo "BUF_EXPECT_VERSION=$(bash .github/ci-scripts/read-workspace-version.sh)" >> "${GITHUB_ENV}"
+          fi
+
+      - name: cargo publish --dry-run
+        run: |
+          set -euo pipefail
+          mkdir -p "${BUF_RS_CACHE_DIR}"
+          if [ "${{ inputs.channel }}" = "prerelease" ]; then
+            cargo publish -p buf-tools --dry-run --locked --allow-dirty
+            cargo publish -p buf-toolchain --dry-run --locked --allow-dirty
+          else
+            cargo publish -p buf-tools --dry-run --locked
+            cargo publish -p buf-toolchain --dry-run --locked
+          fi
+
+      - name: Job summary
+        env:
+          HAVE_CRATES_TOKEN: ${{ steps.token_gate.outputs.have }}
+          PUBLISH_VERSION: ${{ steps.meta.outputs.publish_version }}
+          CHANNEL: ${{ inputs.channel }}
+          REF: ${{ inputs.ref }}
+        run: |
+          set -euo pipefail
+          HEAD_SHA="$(git rev-parse HEAD)"
+          {
+            echo "## Publish verify"
+            echo "- **Channel:** ${CHANNEL}"
+            echo "- **Checkout ref (input):** ${REF}"
+            echo "- **Commit:** \`${HEAD_SHA}\`"
+            echo "- **Workflow dispatch ref:** \`${{ github.ref }}\`"
+            echo "- **Resolved version:** \`${PUBLISH_VERSION}\` (both **buf-tools** and **buf-toolchain**)"
+            echo ""
+            if [ "${HAVE_CRATES_TOKEN}" = "true" ]; then
+              echo "Upload job uses environment **crates-io-publish**. If that environment has **Required reviewers** (public repos on Free/Pro/Team), the run waits for approval; with no protection rules, upload starts right after verify."
+            else
+              echo "**Upload skipped** — add repository secret \`CRATES_IO_TOKEN\` to enable the upload job."
+            fi
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+  upload:
+    name: upload (crates.io)
+    needs: verify
+    # TEMP: skip upload when CRATES_IO_TOKEN unset — remove the next `if:` line once the token is always configured.
+    if: ${{ needs.verify.outputs.have_crates_token == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: crates-io-publish
+    env:
+      BUF_RS_CACHE_DIR: ${{ github.workspace }}/target/buf-rs-cache
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6.0.2
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Stable publish only from main
+        if: inputs.channel == 'stable'
+        run: |
+          set -euo pipefail
+          if [ "${{ github.ref }}" != "refs/heads/main" ]; then
+            echo "::error::Stable publish must be dispatched from the main branch (github.ref=${{ github.ref }})."
+            exit 1
+          fi
+
+      - name: Stable checkout ref must be main
+        if: inputs.channel == 'stable'
+        run: |
+          set -euo pipefail
+          REF="${{ inputs.ref }}"
+          case "${REF}" in
+            main|refs/heads/main) ;;
+            *)
+              echo "::error::Stable publish: inputs.ref must be main (got '${REF}')."
+              exit 1
+              ;;
+          esac
+
+      - name: Apply prerelease version to Cargo.toml (runner only)
+        if: inputs.channel == 'prerelease'
+        run: |
+          set -euo pipefail
+          cargo xtask publish apply-prerelease --run-id "${{ github.run_id }}"
+
+      - name: Regenerate Cargo.lock after version bump (prerelease only)
+        if: inputs.channel == 'prerelease'
+        run: |
+          set -euo pipefail
+          cargo generate-lockfile
+
+      - name: Set BUF_EXPECT_VERSION
+        run: |
+          set -euo pipefail
+          if [ "${{ inputs.channel }}" = "prerelease" ]; then
+            CORE="$(cargo xtask publish workspace-core)"
+            echo "BUF_EXPECT_VERSION=${CORE}" >> "${GITHUB_ENV}"
+          else
+            echo "BUF_EXPECT_VERSION=$(bash .github/ci-scripts/read-workspace-version.sh)" >> "${GITHUB_ENV}"
+          fi
+
+      - name: cargo publish
+        run: |
+          set -euo pipefail
+          mkdir -p "${BUF_RS_CACHE_DIR}"
+          FLAGS=(--locked)
+          if [ "${{ inputs.channel }}" = "prerelease" ]; then
+            FLAGS+=(--allow-dirty)
+          fi
+          cargo publish -p buf-tools "${FLAGS[@]}"
+          cargo publish -p buf-toolchain "${FLAGS[@]}"

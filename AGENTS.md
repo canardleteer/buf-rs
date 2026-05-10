@@ -11,9 +11,10 @@ Concise rules for coding agents. User-facing commands stay in [`README.md`](READ
    the root [`Cargo.toml`](Cargo.toml), and what you publish to crates.io.
 
 For **canary** publishes, crate semver must **not** equal the final stable slot
-(`1.69.0`) until you intentionally ship stable. Use a **pre-release** such as
-`1.69.0-rc.<n>.tools.testing` so a failed publish never burns the stable
-version Buf “owns” semantically.
+(`1.69.0`) until you intentionally ship stable. CI and the manual workflow use
+**`1.69.0-rc.<github.run_id>`** (unique per Actions run). Older examples such as
+`1.69.0-rc.<n>.tools.testing` are equivalent in intent: never burn the stable
+slot until you intentionally ship stable.
 
 **Crate semver tracks the Buf binary, not an independent series.** The
 **core** semver (before any `-` pre-release) **MUST** match the upstream Buf release
@@ -58,20 +59,60 @@ Documentation that must stay in sync when keys/preference/precedence change:
 
 ## Publishing
 
-The workspace sets **`publish = true`** for the publishable crate. To ship **`buf-tools`**
-to crates.io from a clean tree: **`cargo publish -p buf-tools`** (after **`cargo publish --dry-run`**
-if you want a no-upload rehearsal). **`cargo publish --dry-run`** does not consume a
-version on crates.io.
+**Publishable crates:** **`buf-tools`** and **`buf-toolchain`** (see root [`Cargo.toml`](Cargo.toml)
+`[workspace.package]` and `[workspace.dependencies]` pins — keep them in sync when bumping Buf).
+
+- **`cargo publish --dry-run`** does not consume a version on crates.io (safe rehearsal).
+- **Stable `X.Y.Z` is irreversible:** a first successful publish of that version cannot be
+  replaced with different crate contents; **yank** does not free the semver slot. Double-check
+  Buf upstream alignment and run **`rust-tests`** (includes dry-run) before shipping stable.
+
+### Manual publish workflow ([`.github/workflows/publish-crates.yml`](.github/workflows/publish-crates.yml))
+
+- **Trigger:** `workflow_dispatch` only (no automatic upload).
+- **Jobs:** **`verify`** runs packaging **`cargo publish --dry-run`** for both crates; **`upload`**
+  uses environment **`crates-io-publish`** and runs after **`verify`** only if **`CRATES_IO_TOKEN`**
+  is set. While the repo stays **private**, leave that secret unset so **`upload`** never runs; after
+  the repo is **public**, add the secret and optionally **Required reviewers** on **`crates-io-publish`**
+  (Free/Pro/Team: [public repos only](https://docs.github.com/en/actions/reference/deployments-and-environments#required-reviewers))
+  for a pause before **`upload`**.
+- **Pre-release (default):** bumps workspace version on the runner to **`{core}-rc.${{ github.run_id }}`**,
+  runs **`cargo generate-lockfile`**, then **`cargo publish --allow-dirty --locked`** (ephemeral
+  `Cargo.toml` / `Cargo.lock` changes are **not** committed to git).
+- **Stable:** requires **`channel=stable`**, dispatch from **`main`**, **`inputs.ref`** set to **`main`** (guards
+  against dispatching from **`main`** while checking out another ref), and **`confirm_stable_version`**
+  matching **`[workspace.package].version`**; no `--allow-dirty`; no in-runner version bump. Use **prerelease**
+  to exercise non-**`main`** refs.
+- **Upload skipped (green run):** if **`CRATES_IO_TOKEN`** is unset, **`upload`** is skipped — safe for
+  private repos and dry testing. Remove the **`upload`** job’s **`if:`** gate (see TEMP comment in the
+  YAML) once the token is always configured.
+- **Publish version bumps:** [`xtask`](xtask/) — **`cargo xtask publish resolve`**, **`apply-prerelease`**,
+  **`workspace-core`** (alias in [`.cargo/config.toml`](.cargo/config.toml); uses **`--locked`**).
+
+### GitHub settings (before upload works)
+
+1. **Secret:** Settings → Secrets and variables → Actions → **`CRATES_IO_TOKEN`** (crates.io token with
+   publish rights for **`buf-tools`** and **`buf-toolchain`**). Omit until the repo is **public** if you
+   want **`upload`** disabled while private.
+2. **Environment:** Settings → Environments → **`crates-io-publish`** → **Configure environment** →
+   under **Deployment protection rules**, add **Required reviewers** if you want an approval gate before
+   **`upload`** ([public only on Free/Pro/Team](https://docs.github.com/en/actions/reference/deployments-and-environments#required-reviewers)).
+   Optional: **Deployment branches / tags** (e.g. **`main`** only — [Pro/Team private](https://docs.github.com/en/actions/reference/deployments-and-environments#deployment-branches-and-tags)).
+   With no reviewer rule, **`upload`** runs immediately after **`verify`** once the token is set.
+3. **Actions:** enabled; workflow default read-only permissions.
+
+Local one-off: **`cargo publish -p buf-tools`** / **`buf-toolchain`** from a clean tree after
+**`cargo publish -p … --dry-run`**.
 
 ## CI (GitHub Actions)
 
-- **Workflow:** [`.github/workflows/ci.yml`](.github/workflows/ci.yml) — runs on
-  **`push`** and **`pull_request`** to **`main`**, on a **matrix** of hosted runners
-  (linux amd64/arm64, macos arm64, windows amd64; optional **macos amd64** row is
-  commented in the YAML).
-- **Steps:** **`cargo fmt --check`**, **`cargo clippy`**, **`cargo test`**, then both
-  **`buf-tools-examples`** examples via [`.github/ci-scripts/run-examples.sh`](.github/ci-scripts/run-examples.sh)
-  (same script can be run locally).
+- **Tests:** [`.github/workflows/rust-tests.yml`](.github/workflows/rust-tests.yml) — on **`push`** and
+  **`pull_request`** to **`main`**, matrix (linux amd64/arm64, macos arm64, windows amd64). Runs
+  **`cargo fmt --check`**, **`cargo clippy`**, **`cargo test`**, both **`buf-tools-examples`** examples
+  via [`.github/ci-scripts/run-examples.sh`](.github/ci-scripts/run-examples.sh), then
+  **`cargo publish -p buf-tools --dry-run --locked`** and **`buf-toolchain`** (no token; packaging gate).
+- **Publish:** [`.github/workflows/publish-crates.yml`](.github/workflows/publish-crates.yml) — manual only
+  (see **Publishing** above).
 
 ## Linting
 

@@ -77,3 +77,10 @@ jobs:
       # Run fmt check, clippy, workspace tests, then buf_lint + protoc_with_buf_plugins.
       - name: Run workspace CI script
         run: bash .github/ci-scripts/run-examples.sh
+
+      # Packaging gate: does not upload or consume a crates.io version (no token).
+      - name: cargo publish --dry-run (buf-tools, buf-toolchain)
+        run: |
+          set -euo pipefail
+          cargo publish -p buf-tools --dry-run --locked
+          cargo publish -p buf-toolchain --dry-run --locked

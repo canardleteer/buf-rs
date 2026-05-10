@@ -7,7 +7,11 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+if [[ -n "${GITHUB_WORKSPACE:-}" ]]; then
+  ROOT="$(cd "${GITHUB_WORKSPACE}" && pwd)"
+else
+  ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+fi
 cd "$ROOT"
 
 # Primary layout (Unix + Git Bash on Windows): .../out/bin/buf or buf.exe
