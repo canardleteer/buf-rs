@@ -264,6 +264,20 @@ TEST_CRATE_VERSION=1.41.0-rc.1 bash .github/ci-scripts/run-integration-docker.sh
 Or pass the same string as the first argument. Requires Docker (default) or set
 `DOCKER=podman`. More detail: [`.github/ci/integration/README.md`](.github/ci/integration/README.md).
 
+## GitHub workflows
+
+Workflow YAML files live under [`.github/workflows/`](.github/workflows/). **Repository
+settings, tokens, and operator notes** for each workflow are documented in **comment
+headers at the top of those files** (not duplicated here).
+
+| Workflow | Role |
+|----------|------|
+| [**rust-tests.yml**](.github/workflows/rust-tests.yml) | On **push** / **pull_request** to **main**: fmt, clippy, tests, examples, **`cargo publish --dry-run`** for both crates (matrix: Linux amd64/arm64, macOS arm64, Windows amd64). |
+| [**publish-crates.yml**](.github/workflows/publish-crates.yml) | Manual **workflow_dispatch** for crates.io **dev** / **rc** / **stable**; includes **post-publish integration** (Docker) after a successful upload. |
+| [**buf-upstream-watch.yml**](.github/workflows/buf-upstream-watch.yml) | **Schedule** (6h), **workflow_dispatch**, **repository_dispatch**: proposes a bump PR when [bufbuild/buf](https://github.com/bufbuild/buf) **releases/latest** is newer than the workspace pin. |
+
+Maintainer-oriented detail: [`AGENTS.md`](AGENTS.md).
+
 ## License
 
 Rust sources in this repository are licensed under the MIT license — see
