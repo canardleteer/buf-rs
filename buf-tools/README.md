@@ -1,42 +1,41 @@
 # buf-tools
 
-Rust paths to the official **[Buf](https://github.com/bufbuild/buf)** CLI and
-bundled `protoc-gen-buf-*` plugins. This file is the **buf-tools** package
-README on [crates.io](https://crates.io/crates/buf-tools) and in the repo
-[tree](https://github.com/canardleteer/buf-rs/tree/main/buf-tools).
+Rust API for resolving paths to the official
+[Buf](https://github.com/bufbuild/buf) CLI and `protoc-gen-buf-*` plugins.
 
-## What this crate does (read this first)
+- [crates.io/crates/buf-tools][crates-buf-tools]
+- [docs.rs/buf-tools][docs-buf-tools]
 
-The **crates.io package does not contain** the executables. They are larger
-than the crates.io upload cap (~10 MiB per package), so on **first build**
-this crate’s **`build.rs`**
-downloads them from **`bufbuild/buf` GitHub releases**, verifies
-**[minisign](https://jedisct1.github.io/minisign/)** + **`sha256.txt`**, then
-installs them under Cargo’s **`OUT_DIR`**. Same **upstream artifacts** you would
-get from the official release — **pinned by this crate’s semver** — but
-**fetched at compile time**, not shipped inside the `.crate` file.
+The repository overview is in the
+[repo root README][repo-readme]; this file ships in the published crate.
+
+[crates-buf-tools]: https://crates.io/crates/buf-tools
+[docs-buf-tools]: https://docs.rs/buf-tools
+[repo-readme]: https://github.com/canardleteer/buf-rs#readme
+
+## What this crate does
+
+The crates.io tarball does not contain the executables (they exceed the registry
+size limit). On first build, `build.rs` downloads official release assets from
+`bufbuild/buf` on GitHub, verifies `sha256.txt` with
+[minisign](https://jedisct1.github.io/minisign/), and places binaries under
+Cargo’s `OUT_DIR`. The Buf release is pinned by this crate’s semver core (see
+`CARGO_PKG_VERSION` in `build.rs`).
 
 ## Layout mode (`BUF_RS_LAYOUT_MODE`)
 
-`BUF_RS_LAYOUT_MODE` is a compile-time selector for where `buf-tools` exposes
-executables:
+Compile-time selector for where binaries are exposed:
 
-- `cache` (default; also used when unset/empty): current behavior, binaries land
-  under Cargo `OUT_DIR` and downloads are backed by persistent cache.
-- `cache-link`: populate/use persistent cache, then expose binaries at
-  `target/buf-tools/<semver-core>/<TARGET>/bin` via symlink (fallback to copy
-  when symlink is unavailable).
-- `cache-verified-link`: same as `cache-link`, but explicitly re-verifies cache
-  artifacts against trusted release metadata before linking/copying.
-- `target`: bypass persistent cache and keep downloaded artifacts under
-  `target/buf-tools/<semver-core>/<TARGET>/...` (convenient but more re-download
-  prone after cleanups).
+- `cache` (default): binaries under `OUT_DIR`, persistent cache for downloads.
+- `cache-link`: cache plus symlinks (or copies) under
+  `target/buf-tools/<semver-core>/<TARGET>/bin`.
+- `cache-verified-link`: like `cache-link`, re-verifies cache contents before
+  link/copy.
+- `target`: artifacts under `target/buf-tools/<semver-core>/<TARGET>/...`
+  without the shared cache layout.
 
-By default (`build_log=warn`), happy-path builds stay quiet while edge-case
-diagnostics still emit as warnings. Set `BUF_RS_BUILD_LOG=verbose` for full
-detail, or `BUF_RS_BUILD_LOG=silent` to suppress warning output entirely.
-
-Example:
+Build output policy: default `build_log=warn` keeps happy paths quiet; set
+`BUF_RS_BUILD_LOG=verbose` or `silent` as needed.
 
 ```bash
 BUF_RS_LAYOUT_MODE=cache-link cargo build -p buf-tools
@@ -44,119 +43,72 @@ BUF_RS_LAYOUT_MODE=cache-link cargo build -p buf-tools
 
 ## Build-script logging (`BUF_RS_BUILD_LOG`)
 
-- `warn` (default; also used by unset/empty and `true`): emit edge-case
-  diagnostics and build failures, suppress normal info/progress.
-- `verbose`: emit full informational/progress output.
-- `silent` (also used by `false`): suppress build-script warnings entirely.
-- Cargo caveat: build scripts only expose user-visible output through
-  `cargo:warning=`. These levels control emission policy, not Cargo severity
-  classes.
+- `warn` (default; `true` aliases this): warnings and failures only.
+- `verbose`: full progress and diagnostics.
+- `silent` (`false` aliases this): suppress warnings from the build script.
+
+Build scripts only surface output via `cargo:warning=` lines.
 
 ## Source-controlled configuration
 
-`buf-tools` also supports source-controlled defaults in `Cargo.toml` metadata:
+Defaults can live in `Cargo.toml` metadata (overridden by env vars, highest
+precedence):
 
 ```toml
 [workspace.metadata.buf-tools.config]
 layout_mode = "cache-link"
 build_log = "warn"
 cache_dir = "target/buf-rs-cache"
-# Use the same Buf vX.Y.Z as this crate’s semver core (e.g. v1.69.0 for 1.69.0):
-release_base_url = "https://github.com/bufbuild/buf/releases/download/v1.69.0/"
+# Example only — align with [workspace.package].version (authoritative).
+release_base_url = "https://github.com/bufbuild/buf/releases/download/v1.40.0/"
 source_base_url = "https://github.com/bufbuild/buf/archive/refs/tags/"
 ```
 
-You can also override per package:
+Per-package overrides use `[package.metadata.buf-tools.config]`.
 
-```toml
-[package.metadata.buf-tools.config]
-layout_mode = "target"
-build_log = "verbose"
-```
+Supported keys: `layout_mode`, `build_log`, `cache_dir`, `release_base_url`,
+`source_base_url`. Resolution order: built-in defaults → workspace metadata →
+package metadata → environment (and optional `.cargo/config.toml` `[env]`).
 
-Supported keys:
+## Network
 
-- `layout_mode`: `cache`, `cache-link`, `cache-verified-link`, or `target`
-- `build_log`: `warn`, `verbose`, `silent` (`true` aliases `warn`; `false`
-  aliases `silent`)
-- `cache_dir`: cache root directory path
-- `release_base_url`: release asset base URL
-- `source_base_url`: source archive base URL
+HTTPS GET to `github.com` only; no GitHub token required for release downloads.
 
-Resolution order is:
+## Cache layout
 
-1. Built-in defaults
-2. `[workspace.metadata.buf-tools.config]`
-3. `[package.metadata.buf-tools.config]`
-4. Environment variables (**highest precedence**)
+Artifacts live under `$BUF_RS_CACHE_DIR/<semver-core>/<TARGET>/` when set,
+otherwise under the platform cache dir (via the `dirs` crate), e.g.
+`XDG_CACHE_HOME/buf-tools/...`. A successful download survives `cargo clean`
+for that cache root.
 
-Environment variables may also be set via `.cargo/config.toml` `[env]`.
+## Optional source tree (`BUF_RS_INCLUDE_SOURCE`)
 
-## Network and authentication
+When `BUF_RS_INCLUDE_SOURCE=1`, `build.rs` can fetch the tagged source archive
+from GitHub. Source tarballs are not covered by the same `sha256.txt` manifest
+as binaries; use for inspection, not as the primary integrity story.
 
-- **HTTPS GET** to **`github.com`** only — **no GitHub token / PAT** required.
-- Progress lines use **`cargo:warning=`** (often **~10% steps** per large file
-  when `Content-Length` is present).
+## URL overrides
 
-## Cache (default: no surprise re-downloads)
+- `BUF_RS_RELEASE_BASE_URL` — prefix for `sha256.txt`, signatures, and binaries
+  (default `https://github.com/bufbuild/buf/releases/download/v{X.Y.Z}/`).
+- `BUF_RS_SOURCE_BASE_URL` — prefix for optional source fetches (default
+  `https://github.com/bufbuild/buf/archive/refs/tags/`).
 
-Downloaded blobs are stored under:
+Trailing slash optional.
 
-- **`$BUF_RS_CACHE_DIR/<semver-core>/<TARGET>/`** if **`BUF_RS_CACHE_DIR`**
-  is set, else
-- **`$XDG_CACHE_HOME/buf-tools/<semver-core>/<TARGET>/`** (with platform fallbacks
-  via the **`dirs`** crate — see implementation).
+## Concurrent writers
 
-After a successful download, **`cargo clean`** does **not** wipe this cache;
-routine rebuilds reuse verified files.
+`build.rs` uses a lock file under the cache slot so parallel builds do not
+corrupt downloads. With `CARGO_NET_OFFLINE=true`, a cold cache fails fast
+instead of downloading.
 
-## Optional upstream source (`BUF_RS_INCLUDE_SOURCE`)
-
-When **`BUF_RS_INCLUDE_SOURCE=1`** (or `true` / `yes`), **`build.rs`** also
-downloads the **tagged source archive** from GitHub
-(`archive/refs/tags/v{X.Y.Z}.tar.gz`), extracts it under the cache slot, and
-sets **`BUF_RS_SOURCE_ROOT`** for this build.
-
-**Integrity note:** Binaries are verified with Buf’s **`sha256.txt`** +
-**minisign**. GitHub-generated **source tarballs are not covered by that
-manifest** — treat them as an **audit / inspection convenience**, not the same
-assurance level as the binary pipeline.
-
-## Mirror/base URL overrides
-
-Use these when your environment cannot reach GitHub directly:
-
-- `BUF_RS_RELEASE_BASE_URL` overrides the release asset base used for
-  `sha256.txt`, `sha256.txt.minisig`, and binary downloads.
-  - Default:
-    `https://github.com/bufbuild/buf/releases/download/v{X.Y.Z}/`
-- `BUF_RS_SOURCE_BASE_URL` overrides the base used for optional source tarball
-  fetches (`BUF_RS_INCLUDE_SOURCE=1`).
-  - Default:
-    `https://github.com/bufbuild/buf/archive/refs/tags/`
-
-Both values should be URL prefixes. A trailing slash is optional.
-
-## Concurrent cache writers
-
-`build.rs` coordinates concurrent jobs with a slot lock file under the resolved
-cache slot (`<cache-root>/<semver-core>/<target>`). If a writer is already
-active, subsequent jobs wait, log what happened, then validate cached artifacts
-after lock release.
-
-If the lock wait succeeds but expected artifacts are still missing or invalid,
-the next writer downloads them (same as a cold cache), unless **`CARGO_NET_OFFLINE`**
-is set — then the build fails with a cache-miss error.
-
-## CI prewarm then offline build
+## CI: online prewarm then offline build
 
 ```bash
-# Online prewarm (fills cache)
-BUF_RS_CACHE_DIR="$PWD/target/buf-rs-cache" \
-  cargo build -p buf-tools
-
-# Offline repeatable build using warmed cache
-BUF_RS_CACHE_DIR="$PWD/target/buf-rs-cache" \
-  CARGO_NET_OFFLINE=true \
+BUF_RS_CACHE_DIR="$PWD/target/buf-rs-cache" cargo build -p buf-tools
+BUF_RS_CACHE_DIR="$PWD/target/buf-rs-cache" CARGO_NET_OFFLINE=true \
   cargo build -p buf-tools
 ```
+
+For supported targets and `min_version` metadata, see the crate API docs and
+`buf-tools` `build_support` sources in the repository.
