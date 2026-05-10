@@ -31,7 +31,7 @@ Those fields track two related notions:
 
 For **canary** publishes, crate semver must **not** equal the final stable slot
 (e.g. **`1.40.0`**) until you intentionally ship stable. The manual publish workflow defaults to
-**`dev`**: **`{core}-test.<github.run_id>`** (pipeline validation). Use **`rc`** with
+**`dev`**: **`{core}-dev.<github.run_id>`** (pipeline validation). Use **`rc`** with
 **`rc_number`** for **`{core}-rc.N`** when testing with others. Never burn the stable
 slot until you intentionally ship **`stable`**.
 
@@ -100,14 +100,14 @@ Documentation that must stay in sync when keys/preference/precedence change:
   **Note:** **Required reviewers** (if enabled) apply to **every** job that references the environment, so
   **`verify`** may wait for approval before dry-run and **`upload`** may wait again — tune environment rules
   or use a **repository**-level token if you want lighter gating.
-- **Channels:** **`dev`** (default) → **`{core}-test.<run_id>`**; **`rc`** → **`{core}-rc.<rc_number>`**
+- **Channels:** **`dev`** (default) → **`{core}-dev.<run_id>`**; **`rc`** → **`{core}-rc.<rc_number>`**
   (**`rc_number`** input, integer > 0); **`stable`** → committed **`X.Y.Z`** only. **`dev`** / **`rc`**
   run **`cargo xtask publish apply-version`**, **`cargo generate-lockfile`**, then
   **`cargo publish --allow-dirty --locked`** (ephemeral `Cargo.toml` / `Cargo.lock`, not committed).
 - **Stable:** requires **`channel=stable`**, dispatch from **`main`**, **`inputs.ref`** set to **`main`**, and
   **`confirm_stable_version`** matching **`[workspace.package].version`**; no **`--allow-dirty`**; no
   in-runner ephemeral manifest version (dev/rc). Use **`dev`** or **`rc`** to exercise non-**`main`** refs.
-- **Crate pre-release vs Buf binary:** Crate versions may include **`-test.*`** or **`-rc.*`** for buf-rs
+- **Crate pre-release vs Buf binary:** Crate versions may include **`-dev.*`** or **`-rc.*`** for buf-rs
   packaging only. **`build.rs`** still downloads the **stable** Buf GitHub release **`v{major}.{minor}.{patch}`**
   from **`CARGO_PKG_VERSION`** (see **`buf-tools/build.rs`** / **`buf-toolchain/build.rs`**). The verify job
   summary prints **resolved buf for buf-tools** and **resolved buf for buf-toolchain** via
@@ -136,7 +136,7 @@ matches an existing **`bufbuild/buf`** tag **`vX.Y.Z`**.
 
 This is for **maintainers changing which upstream Buf release the workspace pins** (any direction —
 older or newer). It is **not** the same as **`publish apply-version`**, which only rewrites the manifest
-on CI runners for **`dev`** / **`rc`** channels using **`-test.*`** / **`-rc.*`** crate suffixes.
+on CI runners for **`dev`** / **`rc`** channels using **`-dev.*`** / **`-rc.*`** crate suffixes.
 
 After running it: **`cargo generate-lockfile`**, then set **`BUF_EXPECT_VERSION`** from
 **`cargo xtask expected-buf-version`** and run **`cargo test --workspace --locked`** (see the numbered

@@ -4,7 +4,7 @@
 # --- Verify job summary — source of truth (keep in sync when changing versioning) ---
 #
 # The verify job summary lists **workspace crate semver** (full `[workspace.package].version`,
-# including `-test`/`-rc` when present) and **Buf core** (`cargo xtask expected-buf-version`),
+# including `-dev`/`-rc` when present) and **Buf core** (`cargo xtask expected-buf-version`),
 # then the **Crates Resolved Version** subsection and **resolved buf** lines from:
 #   `cargo xtask publish verify-summary --crates-version "$(read-workspace-version.sh)"`
 #   (see `xtask/src/main.rs`, fn `emit_verify_summary`).
@@ -56,7 +56,7 @@ on:
   workflow_dispatch:
     inputs:
       channel:
-        description: dev (default) = -test.RUN_ID; rc = -rc.N; stable = committed X.Y.Z only
+        description: dev (default) = -dev.RUN_ID; rc = -rc.N; stable = committed X.Y.Z only
         type: choice
         default: dev
         options:

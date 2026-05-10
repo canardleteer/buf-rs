@@ -137,7 +137,7 @@ Maintainers use this to set which upstream Buf release the workspace tracks
 Buf release, not only “moving forward.”
 
 It is not the same as `cargo xtask publish apply-version`, which the publish
-workflow uses on CI to apply `-test.*` / `-rc.*` crate pre-release suffixes for
+workflow uses on CI to apply `-dev.*` / `-rc.*` crate pre-release suffixes for
 `dev` / `rc` channels.
 
 Change the pin (maintainers, outside CI): confirm the release exists on
