@@ -7,7 +7,9 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 homepage.workspace = true
-readme.workspace = true
+# Package-local path (do not use `readme.workspace` — workspace `README.md` is repo-only and triggers
+# `cargo publish` warnings when combined with this crate’s own `README.md` in `include`).
+readme = "README.md"
 keywords.workspace = true
 categories.workspace = true
 publish.workspace = true
