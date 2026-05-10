@@ -71,7 +71,7 @@ enum PublishCmd {
         #[arg(long, default_value = "")]
         rc_number: String,
     },
-    /// Set `[workspace.package].version` and workspace dependency pins (dev: `-test.RUN_ID`, rc: `-rc.N`).
+    /// Set `[workspace.package].version` and workspace dependency pins (dev: `-dev.RUN_ID`, rc: `-rc.N`).
     ApplyVersion {
         #[arg(long)]
         channel: PublishChannel,
@@ -220,7 +220,7 @@ fn emit_verify_summary(crates_version: &str) {
     );
     println!();
     println!(
-        "> Crate **pre-release** segments (e.g. `-rc.2`, `-test.123`) are for buf-rs packaging only; they do **not** select a Buf pre-release. **`build.rs`** always downloads the stable Buf release **`v{buf_core}`** for that core."
+        "> Crate **pre-release** segments (e.g. `-rc.2`, `-dev.123`) are for buf-rs packaging only; they do **not** select a Buf pre-release. **`build.rs`** always downloads the stable Buf release **`v{buf_core}`** for that core."
     );
 }
 
@@ -257,7 +257,7 @@ fn main() {
                     }
                     ResolvedPublishFlags::Dev { run_id } => {
                         let core = semver_core(&raw);
-                        let out = format!("{core}-test.{run_id}");
+                        let out = format!("{core}-dev.{run_id}");
                         let _ = must_parse_version("resolve (dev)", &out);
                         println!("{out}");
                     }
@@ -286,7 +286,7 @@ fn main() {
                     }
                     ResolvedPublishFlags::Dev { run_id } => {
                         let core = semver_core(&raw);
-                        format!("{core}-test.{run_id}")
+                        format!("{core}-dev.{run_id}")
                     }
                     ResolvedPublishFlags::Rc { rc_number: n } => {
                         let core = semver_core(&raw);
