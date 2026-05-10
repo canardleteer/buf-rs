@@ -90,11 +90,16 @@ Documentation that must stay in sync when keys/preference/precedence change:
 
 - **Trigger:** `workflow_dispatch` only (no automatic upload).
 - **Jobs:** **`verify`** runs packaging **`cargo publish --dry-run`** for both crates; **`upload`**
-  uses environment **`crates-io-publish`** and runs after **`verify`** only if **`CRATES_IO_TOKEN`**
-  is set. While the repo stays **private**, leave that secret unset so **`upload`** never runs; after
-  the repo is **public**, add the secret and optionally **Required reviewers** on **`crates-io-publish`**
-  (Free/Pro/Team: [public repos only](https://docs.github.com/en/actions/reference/deployments-and-environments#required-reviewers))
-  for a pause before **`upload`**.
+  runs **`cargo publish`** for both crates. Both jobs use environment **`crates-io-publish`** so
+  **environment-scoped** **`CRATES_IO_TOKEN`** is visible (GitHub does not expose environment secrets
+  to jobs that omit **`environment:`**). **`upload`** runs after **`verify`** only if **`verify`**’s
+  token gate sees **`CRATES_IO_TOKEN`** (repository secret or environment secret). While the repo
+  stays **private**, leave that secret unset so **`upload`** never runs; after the repo is **public**,
+  add the secret and optionally **Required reviewers** on **`crates-io-publish`**
+  (Free/Pro/Team: [public repos only](https://docs.github.com/en/actions/reference/deployments-and-environments#required-reviewers)).
+  **Note:** **Required reviewers** (if enabled) apply to **every** job that references the environment, so
+  **`verify`** may wait for approval before dry-run and **`upload`** may wait again — tune environment rules
+  or use a **repository**-level token if you want lighter gating.
 - **Channels:** **`dev`** (default) → **`{core}-test.<run_id>`**; **`rc`** → **`{core}-rc.<rc_number>`**
   (**`rc_number`** input, integer > 0); **`stable`** → committed **`X.Y.Z`** only. **`dev`** / **`rc`**
   run **`cargo xtask publish apply-version`**, **`cargo generate-lockfile`**, then
@@ -113,9 +118,11 @@ Documentation that must stay in sync when keys/preference/precedence change:
   block), and—if the rule changes—**`buf-tools/build.rs`** and **`buf-toolchain/build.rs`** together.
 - **Artifacts:** Each job uploads **`Cargo.toml`**, **`buf-tools/Cargo.toml`**, and **`buf-toolchain/Cargo.toml`**
   for debugging (requires **`permissions.actions: write`** on the workflow).
-- **Upload skipped (green run):** if **`CRATES_IO_TOKEN`** is unset, **`upload`** is skipped — safe for
-  private repos and dry testing. Remove the **`upload`** job’s **`if:`** gate (see TEMP comment in the
-  YAML) once the token is always configured.
+- **Upload skipped (green run):** if **`verify`** does not see **`CRATES_IO_TOKEN`**, **`upload`** is
+  skipped — safe for private repos and dry testing. If the token lives only under **environment**
+  **`crates-io-publish`**, both **`verify`** and **`upload`** must declare that **`environment`** (the
+  workflow does). Remove the **`upload`** job’s **`if:`** gate (see TEMP comment in the YAML) once you
+  always want **`upload`** to run.
 - **Publish helpers:** [`xtask`](xtask/) — **`cargo xtask publish resolve`**, **`apply-version`**,
   **`verify-summary`**, **`cargo xtask expected-buf-version`**, and **`cargo xtask workspace set-buf-version`**
   (alias in [`.cargo/config.toml`](.cargo/config.toml); uses **`--locked`**). See **Pinning the workspace Buf release (`set-buf-version`)** below.
@@ -137,14 +144,17 @@ list under **Two different “versions”**).
 
 ### GitHub settings (before upload works)
 
-1. **Secret:** Settings → Secrets and variables → Actions → **`CRATES_IO_TOKEN`** (crates.io token with
-   publish rights for **`buf-tools`** and **`buf-toolchain`**). Omit until the repo is **public** if you
-   want **`upload`** disabled while private.
-2. **Environment:** Settings → Environments → **`crates-io-publish`** → **Configure environment** →
-   under **Deployment protection rules**, add **Required reviewers** if you want an approval gate before
-   **`upload`** ([public only on Free/Pro/Team](https://docs.github.com/en/actions/reference/deployments-and-environments#required-reviewers)).
+1. **Secret `CRATES_IO_TOKEN`:** either **repository** (Settings → Secrets and variables → Actions) or
+   **environment** **`crates-io-publish`** (Environment secrets). The publish workflow assigns **`verify`**
+   and **`upload`** both to **`environment: crates-io-publish`** so environment-scoped tokens are visible
+   to the verify-step gate and to **`CARGO_REGISTRY_TOKEN`**. Omit the secret until the repo is **public**
+   if you want **`upload`** disabled while private.
+2. **Environment `crates-io-publish`:** Settings → Environments → **`crates-io-publish`** → **Configure environment** →
+   optional **Required reviewers** or deployment-branch rules
+   ([public-only reviewers on Free/Pro/Team](https://docs.github.com/en/actions/reference/deployments-and-environments#required-reviewers)).
+   **`verify`** and **`upload`** both reference this environment, so each job may trigger the same protection
+   rules (e.g. two review rounds if reviewers are required).
    Optional: **Deployment branches / tags** (e.g. **`main`** only — [Pro/Team private](https://docs.github.com/en/actions/reference/deployments-and-environments#deployment-branches-and-tags)).
-   With no reviewer rule, **`upload`** runs immediately after **`verify`** once the token is set.
 3. **Actions:** enabled; **`publish-crates.yml`** uses **`contents: read`** and **`actions: write`**
   (artifact uploads). Other workflows may stay read-only for contents.
 

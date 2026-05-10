@@ -19,13 +19,14 @@
 #
 # --- GitHub settings prerequisites (do this before the pipeline can upload) ---
 #
-# 1) Secret (repository or environment-scoped)
-#    - Settings → Secrets and variables → Actions → New repository secret
-#    - Name: CRATES_IO_TOKEN
-#    - Value: crates.io API token with publish rights for buf-tools and buf-toolchain
+# 1) Secret `CRATES_IO_TOKEN` (repository **or** environment `crates-io-publish`)
+#    - **Repository:** Settings → Secrets and variables → Actions → New repository secret.
+#    - **Environment:** Settings → Environments → `crates-io-publish` → Environment secrets.
+#    GitHub only injects **environment** secrets into jobs that declare `environment:` — both
+#    **`verify`** and **`upload`** use **`crates-io-publish`** so the verify-step token gate and
+#    **`CARGO_REGISTRY_TOKEN`** see the same env-scoped token.
 #    While the repository is **private**, you can omit this secret so **`upload`** never runs (only
-#    **`verify`** / dry-run). After the repo is **public**, add the secret and use the environment
-#    gate below if you want a manual approval step before upload.
+#    **`verify`** / dry-run).
 #
 # 2) Environment (approval gate + secret scope for upload, once you publish from CI)
 #    - Settings → Environments → New environment → name: crates-io-publish → Configure environment
@@ -37,9 +38,9 @@
 # 3) Actions
 #    - Settings → Actions → General: enable Actions; workflow permissions below
 #
-# Upload is skipped (job skipped, workflow green) when CRATES_IO_TOKEN is unset —
-# safe for dry testing. Remove the TEMP "if:" line on the upload job when the
-# token is always configured (see comment on that job).
+# Upload is skipped (job skipped, workflow green) when **verify** does not see **CRATES_IO_TOKEN**
+# (unset repo secret and unset env secret) — safe for dry testing. Remove the TEMP **if:** on the
+# upload job when you always want **upload** to run (see comment on that job).
 #
 # Dev/rc path: `cargo xtask publish apply-version`, then `cargo generate-lockfile`, then
 # publish with `--allow-dirty --locked` (changes are never committed). See `xtask/` + `.cargo/config.toml`.
@@ -88,6 +89,9 @@ jobs:
   verify:
     name: verify (dry-run)
     runs-on: ubuntu-latest
+    # Same environment as `upload` so `secrets.CRATES_IO_TOKEN` resolves when the token is stored
+    # only under Environment secrets (repository secrets are still available here).
+    environment: crates-io-publish
     timeout-minutes: 30
     outputs:
       # Job-level `if` on dependent jobs may not use `secrets`; pass through from a step instead.
@@ -227,7 +231,7 @@ jobs:
             if [ "${HAVE_CRATES_TOKEN}" = "true" ]; then
               echo "Upload job uses environment **crates-io-publish**. If that environment has **Required reviewers** (public repos on Free/Pro/Team), the run waits for approval; with no protection rules, upload starts right after verify."
             else
-              echo "**Upload skipped** — add repository secret \`CRATES_IO_TOKEN\` to enable the upload job."
+              echo "**Upload skipped** — \`CRATES_IO_TOKEN\` was not visible to **verify** (empty). Add it as a **repository** Actions secret, or as a secret on environment **crates-io-publish** (both **verify** and **upload** use that environment)."
             fi
           } >> "${GITHUB_STEP_SUMMARY}"
 
