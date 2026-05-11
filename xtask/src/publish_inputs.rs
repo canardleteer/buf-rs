@@ -24,9 +24,11 @@ pub enum ResolvedPublishFlags {
 /// Validate flags for `resolve` / `apply-version`.
 ///
 /// - **stable:** `--run-id` and `--rc-number` must be empty (after trim).
-/// - **dev:** `--rc-number` must be empty; `--run-id` non-empty, or `GITHUB_RUN_ID` set, or (when
-///   `GITHUB_ACTIONS` is not `true`) a random synthetic run id is used with `log::warn!` and an
-///   optional `GITHUB_STEP_SUMMARY` append — for local runs without CI env.
+/// - **dev:** `--rc-number` must be empty; `--run-id` non-empty, or `GITHUB_RUN_ID` set, or (only on
+///   an obvious **local** machine — no `GITHUB_JOB` and `GITHUB_ACTIONS` not truthy) a random
+///   synthetic run id is used with `log::warn!` and an optional `GITHUB_STEP_SUMMARY` line.
+///   GitHub-hosted / Actions-like runners must pass `--run-id` or have `GITHUB_RUN_ID`; otherwise
+///   resolution fails instead of inventing an id.
 /// - **rc:** `--run-id` must be empty; `--rc-number` required, parseable as `u32` > 0.
 pub fn resolve_flags(
     channel: PublishChannel,
@@ -39,11 +41,14 @@ pub fn resolve_flags(
 
     if matches!(channel, PublishChannel::Dev) && run_id.trim().is_empty() && github_run_id.is_none()
     {
-        let in_github_actions = std::env::var("GITHUB_ACTIONS").ok().as_deref() == Some("true");
-        if !in_github_actions {
+        // Never synthesize on a GitHub Actions job: those always have `GITHUB_JOB`, and normally
+        // `GITHUB_RUN_ID` / `GITHUB_ACTIONS` too. If those are missing but `GITHUB_JOB` is set,
+        // failing is safer than emitting a "local" synthetic id into CI logs/summaries.
+        let on_github_like_runner = env_truthy_github_actions() || github_job_is_set();
+        if !on_github_like_runner {
             let synthetic = fastrand::u64(..);
             let summary = format!(
-                "> **xtask (dev publish):** synthetic run id `{synthetic}` — `GITHUB_RUN_ID` was unset and this does not appear to be a GitHub Actions environment (`GITHUB_ACTIONS` is not `true`). Continuing."
+                "Dev publish (local): using synthetic run id `{synthetic}` because `--run-id` was empty, `GITHUB_RUN_ID` was unset, and this process does not look like a GitHub Actions job (`GITHUB_JOB` unset, `GITHUB_ACTIONS` not true)."
             );
             log::warn!(target: "xtask::publish", "{summary}");
             append_github_step_summary_line(&summary);
@@ -52,6 +57,18 @@ pub fn resolve_flags(
     }
 
     resolve_flags_with_github_run_id(channel, run_id, rc_number, github_run_id)
+}
+
+fn env_truthy_github_actions() -> bool {
+    std::env::var("GITHUB_ACTIONS")
+        .map(|s| s.eq_ignore_ascii_case("true"))
+        .unwrap_or(false)
+}
+
+fn github_job_is_set() -> bool {
+    std::env::var("GITHUB_JOB")
+        .map(|s| !s.trim().is_empty())
+        .unwrap_or(false)
 }
 
 fn append_github_step_summary_line(line: &str) {
@@ -203,6 +220,10 @@ mod tests {
             [
                 ("GITHUB_RUN_ID", None::<&str>),
                 ("GITHUB_ACTIONS", None::<&str>),
+                ("GITHUB_JOB", None::<&str>),
+                // In real GitHub Actions, unset this too: otherwise `resolve_flags` appends the
+                // synthetic-run note to the *job* summary file while simulating a "local" env.
+                ("GITHUB_STEP_SUMMARY", None::<&str>),
             ],
             || {
                 let r = resolve_flags(PublishChannel::Dev, "", "").unwrap();
@@ -220,6 +241,35 @@ mod tests {
             [
                 ("GITHUB_RUN_ID", None::<&str>),
                 ("GITHUB_ACTIONS", Some("true")),
+                ("GITHUB_JOB", None::<&str>),
+            ],
+            || {
+                assert!(resolve_flags(PublishChannel::Dev, "", "").is_err());
+            },
+        );
+    }
+
+    #[test]
+    fn dev_empty_run_id_with_github_job_set_fails_without_run_id() {
+        temp_env::with_vars(
+            [
+                ("GITHUB_RUN_ID", None::<&str>),
+                ("GITHUB_ACTIONS", None::<&str>),
+                ("GITHUB_JOB", Some("verify")),
+            ],
+            || {
+                assert!(resolve_flags(PublishChannel::Dev, "", "").is_err());
+            },
+        );
+    }
+
+    #[test]
+    fn dev_github_actions_truthy_case_insensitive_skips_synthetic_without_run_id() {
+        temp_env::with_vars(
+            [
+                ("GITHUB_RUN_ID", None::<&str>),
+                ("GITHUB_ACTIONS", Some("True")),
+                ("GITHUB_JOB", None::<&str>),
             ],
             || {
                 assert!(resolve_flags(PublishChannel::Dev, "", "").is_err());
@@ -239,6 +289,7 @@ mod tests {
             [
                 ("GITHUB_RUN_ID", None::<&str>),
                 ("GITHUB_ACTIONS", None::<&str>),
+                ("GITHUB_JOB", None::<&str>),
                 ("GITHUB_STEP_SUMMARY", Some(path.to_str().unwrap())),
             ],
             || {

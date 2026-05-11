@@ -46,8 +46,10 @@
 # publish with `--allow-dirty --locked` (changes are never committed). See `xtask/` + `.cargo/config.toml`.
 #
 # `publish resolve` / `publish apply-version` always receive `--channel`, `--run-id`, and
-# `--rc-number` (empty strings when unused). `xtask/src/publish_inputs.rs` validates the
-# channel-specific rules (including rc: positive decimal, no leading zeros).
+# `--rc-number` (empty strings when unused). For **dev**, the workflow sets `--run-id` from the
+# runner's **`GITHUB_RUN_ID`** (same value as `github.run_id`, but avoids expression edge cases).
+# `xtask/src/publish_inputs.rs` validates channel-specific rules (including rc: positive decimal,
+# no leading zeros).
 #
 # =============================================================================
 name: publish-crates
@@ -140,10 +142,18 @@ jobs:
         id: meta
         env:
           CHANNEL: ${{ inputs.channel }}
-          RUN_ID: ${{ inputs.channel == 'dev' && github.run_id || '' }}
           RC_NUMBER: ${{ inputs.channel == 'rc' && inputs.rc_number || '' }}
         run: |
           set -euo pipefail
+          if [ "${CHANNEL}" = "dev" ]; then
+            RUN_ID="${GITHUB_RUN_ID:-}"
+            if [ -z "${RUN_ID}" ]; then
+              echo "::error::dev publish needs GITHUB_RUN_ID (unset on this runner)."
+              exit 1
+            fi
+          else
+            RUN_ID=""
+          fi
           V="$(cargo xtask publish resolve --channel "${CHANNEL}" --run-id "${RUN_ID}" --rc-number "${RC_NUMBER}")"
           echo "publish_version=${V}" >> "${GITHUB_OUTPUT}"
 
@@ -167,10 +177,18 @@ jobs:
         if: inputs.channel == 'dev' || inputs.channel == 'rc'
         env:
           CHANNEL: ${{ inputs.channel }}
-          RUN_ID: ${{ inputs.channel == 'dev' && github.run_id || '' }}
           RC_NUMBER: ${{ inputs.channel == 'rc' && inputs.rc_number || '' }}
         run: |
           set -euo pipefail
+          if [ "${CHANNEL}" = "dev" ]; then
+            RUN_ID="${GITHUB_RUN_ID:-}"
+            if [ -z "${RUN_ID}" ]; then
+              echo "::error::dev publish needs GITHUB_RUN_ID (unset on this runner)."
+              exit 1
+            fi
+          else
+            RUN_ID=""
+          fi
           cargo xtask publish apply-version --channel "${CHANNEL}" --run-id "${RUN_ID}" --rc-number "${RC_NUMBER}"
 
       - name: Regenerate Cargo.lock after dev/rc manifest version (dev/rc only)
@@ -285,10 +303,18 @@ jobs:
         if: inputs.channel == 'dev' || inputs.channel == 'rc'
         env:
           CHANNEL: ${{ inputs.channel }}
-          RUN_ID: ${{ inputs.channel == 'dev' && github.run_id || '' }}
           RC_NUMBER: ${{ inputs.channel == 'rc' && inputs.rc_number || '' }}
         run: |
           set -euo pipefail
+          if [ "${CHANNEL}" = "dev" ]; then
+            RUN_ID="${GITHUB_RUN_ID:-}"
+            if [ -z "${RUN_ID}" ]; then
+              echo "::error::dev publish needs GITHUB_RUN_ID (unset on this runner)."
+              exit 1
+            fi
+          else
+            RUN_ID=""
+          fi
           cargo xtask publish apply-version --channel "${CHANNEL}" --run-id "${RUN_ID}" --rc-number "${RC_NUMBER}"
 
       - name: Regenerate Cargo.lock after dev/rc manifest version (dev/rc only)

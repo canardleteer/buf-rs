@@ -165,8 +165,8 @@ jobs:
           CURRENT="${{ steps.compare.outputs.current }}"
           REPO="${GITHUB_REPOSITORY}"
 
-          OWNER="${GITHUB_REPOSITORY%%/*}"
-          count="$(gh pr list --base "${BASE}" --state open --head "${OWNER}:${HEAD}" --json number --jq 'length')"
+          # `gh pr list --head` takes the branch ref only (`owner:branch` is not supported; see cli/cli#10945).
+          count="$(gh pr list --base "${BASE}" --state open --head "${HEAD}" --json number --jq 'length')"
           if [[ "${count}" != "0" ]]; then
             {
               echo "## Buf upstream watch — PR already open"
@@ -241,11 +241,23 @@ jobs:
           path.write_text(body, encoding="utf-8")
           PY
 
-          gh pr create \
+          if pr_out="$(gh pr create \
             --base "${BASE}" \
             --head "${HEAD}" \
             --title "chore: bump Buf pin to ${LATEST}" \
-            --body-file "${BODY_FILE}"
+            --body-file "${BODY_FILE}" 2>&1)"; then
+            :
+          elif [[ "${pr_out}" == *"already exists"* ]]; then
+            {
+              echo "## Buf upstream watch — PR already open"
+              echo "Branch \`${HEAD}\` is up to date on the remote; an open PR into \`${BASE}\` already exists (race or transient \`gh pr list\` mismatch)."
+              echo "${pr_out}"
+            } >> "${GITHUB_STEP_SUMMARY}"
+            exit 0
+          else
+            printf '%s\n' "${pr_out}" >&2
+            exit 1
+          fi
 
           {
             echo "## Buf upstream watch — opened PR"
