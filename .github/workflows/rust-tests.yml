@@ -30,7 +30,8 @@ jobs:
 
     runs-on: ${{ matrix.platform.runs_on }}
 
-    # Use bash everywhere (including windows-latest) so .github/ci-scripts/*.sh runs identically.
+    # Use bash everywhere (including windows-2025-vs2026 which will become
+    # windows-latest in the future) so .github/ci-scripts/*.sh runs identically.
     defaults:
       run:
         shell: bash
@@ -57,7 +58,7 @@ jobs:
 
           # Windows x86_64 (Git Bash provides bash for our scripts).
           - name: windows-amd64
-            runs_on: windows-latest
+            runs_on: windows-2025-vs2026
 
     env:
       # Shared Buf download cache path for build.rs (matches README CI prewarm pattern).
