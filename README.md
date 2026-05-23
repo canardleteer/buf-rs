@@ -274,7 +274,7 @@ headers at the top of those files** (not duplicated here).
 |----------|------|
 | [**rust-tests.yml**](.github/workflows/rust-tests.yml) | On **push** / **pull_request** to **main**: fmt, clippy, tests, examples, **`cargo publish --dry-run`** for both crates (matrix: Linux amd64/arm64, macOS arm64, Windows amd64). |
 | [**publish-crates.yml**](.github/workflows/publish-crates.yml) | Manual **workflow_dispatch** for crates.io **dev** / **rc** / **stable**; includes **post-publish integration** (Docker) after a successful upload. |
-| [**buf-upstream-watch.yml**](.github/workflows/buf-upstream-watch.yml) | **Schedule** (6h), **workflow_dispatch**, **repository_dispatch**: proposes a bump PR when [bufbuild/buf](https://github.com/bufbuild/buf) **releases/latest** is newer than the workspace pin. |
+| [**buf-upstream-watch.yml**](.github/workflows/buf-upstream-watch.yml) | **Schedule** (every 2 days), **workflow_dispatch**, **repository_dispatch**: proposes a bump PR when [bufbuild/buf](https://github.com/bufbuild/buf) **releases/latest** is newer than the workspace pin. |
 
 Maintainer-oriented detail: [`AGENTS.md`](AGENTS.md).
 
