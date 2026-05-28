@@ -31,14 +31,13 @@ pub fn download(url: &str) -> Result<Vec<u8>, String> {
 }
 
 fn download_once(url: &str) -> Result<Vec<u8>, String> {
-    let mut reader = ureq::get(url)
-        .set("User-Agent", USER_AGENT)
+    ureq::get(url)
+        .header("User-Agent", USER_AGENT)
         .call()
         .map_err(|e| e.to_string())?
-        .into_reader();
-    let mut buf = Vec::new();
-    reader.read_to_end(&mut buf).map_err(|e| e.to_string())?;
-    Ok(buf)
+        .body_mut()
+        .read_to_vec()
+        .map_err(|e| e.to_string())
 }
 
 /// Download large blob with `cargo:warning=` progress (≥ 10% bands when Content-Length present).
@@ -72,16 +71,18 @@ fn download_streaming_once(
     label: &str,
     warn: &mut dyn FnMut(String),
 ) -> Result<Vec<u8>, String> {
-    let resp = ureq::get(url)
-        .set("User-Agent", USER_AGENT)
+    let mut resp = ureq::get(url)
+        .header("User-Agent", USER_AGENT)
         .call()
         .map_err(|e| e.to_string())?;
 
     let total = resp
-        .header("Content-Length")
+        .headers()
+        .get("Content-Length")
+        .and_then(|s| s.to_str().ok())
         .and_then(|s| s.parse::<u64>().ok());
 
-    let mut reader = resp.into_reader();
+    let mut reader = resp.body_mut().as_reader();
     let mut buf = Vec::new();
     let mut read_total: u64 = 0;
     // Last printed milestone percent (0, 10, …, 100); 0% emitted above.
