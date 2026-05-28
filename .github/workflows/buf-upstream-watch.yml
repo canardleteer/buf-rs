@@ -16,11 +16,16 @@
 # 3) Allow Actions to create pull requests (if your org shows this toggle)
 #    Enable so the workflow can open the automated bump PR.
 #
-# 4) Default branch
+# 4) GITHUB_TOKEN does not trigger other workflows (including pull_request on rust-tests)
+#    when this job pushes a branch and opens a PR. After creating the bump PR, this workflow
+#    dispatches rust-tests via `gh workflow run` (needs **actions: write** below). To re-run
+#    manually: **Actions** → **rust-tests** → **Run workflow** → branch `automated/buf/X.Y.Z`.
+#
+# 5) Default branch
 #    `schedule` only runs workflows from the **default branch**; merge this file
 #    there for cron to fire.
 #
-# 5) repository_dispatch from outside GitHub
+# 6) repository_dispatch from outside GitHub
 #    Callers need a token with access to this repo (e.g. classic PAT `repo`, or
 #    fine-grained token with Contents + Metadata). Example:
 #    curl -L -X POST -H "Accept: application/vnd.github+json"
@@ -62,6 +67,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  actions: write
 
 concurrency:
   group: buf-upstream-watch
@@ -219,7 +225,18 @@ jobs:
               Automated bump: workspace Buf core **{current}** → **{latest}** to match [bufbuild/buf v{latest}](https://github.com/bufbuild/buf/releases/tag/v{latest}).
 
               - [ ] Review changelog / breaking changes upstream
-              - [ ] Merge when ready, or try a **dev** publish first (below)
+              - [ ] Merge when CI is green, or try a **dev** publish first (below)
+
+              ### CI (required status checks)
+
+              Bot-opened PRs do not auto-run **rust-tests** (GITHUB_TOKEN limitation). This workflow dispatches the matrix after opening the PR; re-run if needed.
+
+              **Actions UI:** **Actions** → **rust-tests** → **Run workflow** → branch `{head}`
+
+              **CLI:**
+              ```bash
+              gh workflow run rust-tests.yml --repo {repo} --ref {head}
+              ```
 
               ### Try a dev crates.io publish (without merging to `{base}`)
 
@@ -259,8 +276,11 @@ jobs:
             exit 1
           fi
 
+          gh workflow run rust-tests.yml --ref "${HEAD}"
+
           {
             echo "## Buf upstream watch — opened PR"
             echo "- **${CURRENT}** → **${LATEST}**"
             echo "- Branch: \`${HEAD}\`"
+            echo "- Dispatched **rust-tests** on \`${HEAD}\` (required checks for the ruleset)."
           } >> "${GITHUB_STEP_SUMMARY}"

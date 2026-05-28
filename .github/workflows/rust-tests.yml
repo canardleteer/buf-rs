@@ -6,7 +6,9 @@
 # -----------------------------------------------------------------------------
 name: rust-tests
 
-# Run on pushes to main and on pull requests targeting main (merge-request flow).
+# Run on pushes to main, pull requests targeting main, and manual/dispatched runs.
+# workflow_dispatch: use the bump branch as "Run workflow" branch (or `--ref` in gh) so
+# status checks attach to the PR head commit; see buf-upstream-watch.yml.
 on:
   push:
     branches:
@@ -14,6 +16,13 @@ on:
   pull_request:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch or SHA to checkout (optional; defaults to the dispatch branch)
+        required: false
+        type: string
+        default: ""
 
 # Cancel older runs on the same branch when new commits arrive.
 concurrency:
@@ -68,6 +77,8 @@ jobs:
       # Fetch full git history (default depth is enough for this repo).
       - name: Checkout repository
         uses: actions/checkout@v6.0.2
+        with:
+          ref: ${{ inputs.ref || github.ref }}
 
       # Bootstrap rustup; channel + components come from repo-root rust-toolchain.toml (single source of truth).
       - name: Install Rust toolchain
