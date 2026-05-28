@@ -1,8 +1,9 @@
 # -----------------------------------------------------------------------------
-# Workspace CI: rustfmt, clippy, tests, and buf-tools examples on multiple hosts.
+# Workspace CI: rustfmt, clippy, tests, buf-tools examples, and cargo audit.
 # Rustfmt/clippy/test/example orchestration lives in .github/ci-scripts/run-examples.sh
 # so this file stays mostly declarative. That script sets BUF_EXPECT_VERSION via
 # `cargo xtask expected-buf-version` (Buf core from root [workspace.package].version).
+# Audit runs once in a separate job (same Cargo.lock on every host).
 # -----------------------------------------------------------------------------
 name: rust-tests
 
@@ -94,3 +95,20 @@ jobs:
           set -euo pipefail
           cargo publish -p buf-tools --dry-run --locked
           cargo publish -p buf-toolchain --dry-run --locked
+
+  audit:
+    name: cargo audit
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6.0.2
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: cargo audit
+        uses: rustsec/audit-check@v2.0.0
