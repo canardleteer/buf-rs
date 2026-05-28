@@ -2,7 +2,6 @@
 
 use std::collections::HashMap;
 use std::env;
-use std::io::Read;
 use std::path::Path;
 
 use regex::Regex;
@@ -29,19 +28,15 @@ pub fn extract_installed_buf_core(stdout: &str) -> Option<String> {
 }
 
 fn http_get(url: &str, accept: Option<&str>) -> Result<Vec<u8>, String> {
-    let mut req = ureq::get(url).set("User-Agent", USER_AGENT);
+    let mut req = ureq::get(url).header("User-Agent", USER_AGENT);
     if let Some(a) = accept {
-        req = req.set("Accept", a);
+        req = req.header("Accept", a);
     }
-    let mut reader = req
-        .call()
+    req.call()
         .map_err(|e| format!("GET {url}: {e}"))?
-        .into_reader();
-    let mut buf = Vec::new();
-    reader
-        .read_to_end(&mut buf)
-        .map_err(|e| format!("read body {url}: {e}"))?;
-    Ok(buf)
+        .body_mut()
+        .read_to_vec()
+        .map_err(|e| format!("read body {url}: {e}"))
 }
 
 fn resolve_release_base(installed_core: &str) -> Result<String, String> {
