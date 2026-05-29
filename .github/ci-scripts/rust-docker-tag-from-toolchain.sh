@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Print rust:<tag> suffix for official library/rust images, e.g. 1.95-slim-bookworm,
+# Print rust:<tag> suffix for official library/rust images, e.g. 1.96-slim-bookworm,
 # from repo-root rust-toolchain.toml channel = "X.Y.Z" (single source of truth).
 # Usage: rust-docker-tag-from-toolchain.sh [path/to/rust-toolchain.toml]
 set -euo pipefail

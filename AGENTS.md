@@ -181,7 +181,7 @@ Local one-off: **`cargo publish -p buf-tools`** / **`buf-toolchain`** from a cle
 
 ## `rust-toolchain.toml` (pinned Rust toolchain)
 
-The repo root **[`rust-toolchain.toml`](rust-toolchain.toml)** sets **`channel`** to an **explicit stable release** (e.g. **`1.95.0`**) — not the bare **`stable`** channel string — so resolution is reproducible. **Today’s pin is `1.95.0` because that is the current latest stable** on **[releases.rs](https://releases.rs)**; as new stables ship, maintainers should **bump `channel` (and aligned bits below) to track latest stable**, unless the project **deliberately** stays on an older compiler (document that choice).
+The repo root **[`rust-toolchain.toml`](rust-toolchain.toml)** sets **`channel`** to an **explicit stable release** (e.g. **`1.96.0`**) — not the bare **`stable`** channel string — so resolution is reproducible. **Today’s pin is `1.96.0` because that is the current latest stable** on **[releases.rs](https://releases.rs)**; as new stables ship, maintainers should **bump `channel` (and aligned bits below) to track latest stable**, unless the project **deliberately** stays on an older compiler (document that choice).
 
 **Whenever you edit [`rust-toolchain.toml`](rust-toolchain.toml)** — bump, tweak **`components`**, or otherwise touch the file — **check [releases.rs](https://releases.rs)** so you know whether you are staying on **latest stable**, intentionally behind, or intentionally pinning a specific release for another reason.
 
