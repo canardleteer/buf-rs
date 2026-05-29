@@ -41,18 +41,18 @@ authoritative table.
 
 Install location:
 
-- `BUF_RS_TOOLCHAIN_BIN_DIR` — if non-empty, install only here; otherwise
+- `BUF_RS_TOOLCHAIN_BIN_DIR`: if non-empty, install only here; otherwise
   `$CARGO_HOME/bin`.
 
 Cache and downloads:
 
-- `BUF_RS_CACHE_DIR` — optional cache root (`<semver-core>/<target>/` under it).
-- `BUF_RS_RELEASE_BASE_URL` — optional prefix for release assets (default
+- `BUF_RS_CACHE_DIR`: optional cache root (`<semver-core>/<target>/` under it).
+- `BUF_RS_RELEASE_BASE_URL`: optional prefix for release assets (default
   `https://github.com/bufbuild/buf/releases/download/v{X.Y.Z}/`).
 
 Validation helper (`validate-cargo-buf-toolchain` binary):
 
-- `BUF_RS_VALIDATE_OFFLINE=1` — skip GitHub and crates.io network calls.
+- `BUF_RS_VALIDATE_OFFLINE=1`: skip GitHub and crates.io network calls.
 
 Options that apply only when depending on `buf-tools` directly (layout, build
 log, source bundles) are documented in the [buf-tools docs][docs-buf-tools].
@@ -84,7 +84,7 @@ BUF_RS_TOOLCHAIN_BIN_DIR="$HOME/.local/bin" validate-cargo-buf-toolchain
 
 ```toml
 [build-dependencies]
-# Example only — pin to the Buf release you need (authoritative: workspace root).
+# Example only: pin to the Buf release you need (authoritative: workspace root).
 buf-toolchain = "1.40.0"
 ```
 
