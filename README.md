@@ -39,7 +39,7 @@ to place `buf` and `protoc-gen-buf-*` in your bin directory.
 
 ```toml
 [dependencies]
-# Example only — match Buf release to root Cargo.toml [workspace.package].version.
+# Example only: match Buf release to root Cargo.toml [workspace.package].version.
 buf-tools = "1.40.0"
 ```
 
@@ -61,7 +61,7 @@ cargo install buf-toolchain
 The `build.rs` shares `buf-tools`’ `build_support` (verify, lock, targets) and
 installs `buf` and `protoc-gen-buf-*` with plain names (`*.exe` on Windows). By
 default those binaries go to `$CARGO_HOME/bin` (atomic install). `cargo install`
-also installs `validate-cargo-buf-toolchain` — run it after install for local
+also installs `validate-cargo-buf-toolchain`. Run it after install for local
 checks plus GitHub / crates.io checks, or set `BUF_RS_VALIDATE_OFFLINE=1` to skip
 network I/O.
 
@@ -70,17 +70,17 @@ runs the same `build.rs` without `cargo install`:
 
 ```toml
 [build-dependencies]
-# Example only — match root [workspace.package].version or your pin.
+# Example only: match root [workspace.package].version or your pin.
 buf-toolchain = "1.40.0"
 ```
 
-- `BUF_RS_TOOLCHAIN_BIN_DIR` (optional) — install into this directory instead
+- `BUF_RS_TOOLCHAIN_BIN_DIR` (optional): install into this directory instead
   of `$CARGO_HOME/bin`.
 - Otherwise binaries go to `$CARGO_HOME/bin` (or `~/.cargo/bin`).
 - `BUF_RS_CACHE_DIR` (optional) overrides the download cache root.
 - `BUF_RS_RELEASE_BASE_URL` (optional) overrides the release asset base URL for
   both crates (and runtime validation in `validate-cargo-buf-toolchain`).
-- `BUF_RS_VALIDATE_OFFLINE` (optional, `validate-cargo-buf-toolchain`) — set to
+- `BUF_RS_VALIDATE_OFFLINE` (optional, `validate-cargo-buf-toolchain`): set to
   `1` to skip GitHub / crates.io (local checks only).
 - `BUF_RS_SOURCE_BASE_URL` (optional, `buf-tools` only) overrides optional
   upstream source tarball base URL.
@@ -117,7 +117,7 @@ Authoritative: [Cargo.toml](Cargo.toml) `[workspace.package].version` (plain
 `[workspace.dependencies]`. Each crate’s `build.rs` downloads the `bufbuild/buf`
 tag `vX.Y.Z` from that core.
 
-Examples in this file use a concrete version for copy-paste only — if they
+Examples in this file use a concrete version for copy-paste only. If they
 drift from the manifest, trust `Cargo.toml`.
 
 Reading the pinned core:
@@ -158,8 +158,8 @@ cargo test --workspace --locked
 `buf-tools`’s `build.rs` resolves the compilation target to one of the official
 `bufbuild/buf` release asset suffixes and downloads three binaries (`buf`,
 `protoc-gen-buf-lint`, `protoc-gen-buf-breaking`). If the crate’s pinned Buf
-version predates a target’s introduction, the build fails fast — before any HTTP
-fetch — with a clear error.
+version predates a target’s introduction, the build fails fast before any HTTP
+fetch with a clear error.
 
 | Asset suffix      | Rust target triples                                        | Min Buf |
 | ----------------- | ---------------------------------------------------------- | ------- |
@@ -245,7 +245,7 @@ cargo test --workspace --locked
 
 ### Post-publish testing
 
-After a version is on crates.io, you can run the same **registry-only** smoke
+After a version is on crates.io, you can run the same registry-only smoke
 the manual publish workflow uses (minimal Docker context, no workspace `path`
 deps): [`.github/ci-scripts/run-integration-docker.sh`](.github/ci-scripts/run-integration-docker.sh)
 stages [`rust-toolchain.toml`](rust-toolchain.toml), the integration manifest
@@ -254,7 +254,7 @@ under [`.github/ci/integration/`](.github/ci/integration/), and mirrored
 entrypoint (`cargo add buf-tools`, `cargo install buf-toolchain`, `buf --version`
 vs crate semver core, `buf build` for the example baseline, both examples).
 
-`TEST_CRATE_VERSION` must be a **published** semver (whatever you just shipped),
+`TEST_CRATE_VERSION` must be a published semver (whatever you shipped),
 not only the value in `Cargo.toml`:
 
 ```bash
@@ -266,21 +266,21 @@ Or pass the same string as the first argument. Requires Docker (default) or set
 
 ## GitHub workflows
 
-Workflow YAML files live under [`.github/workflows/`](.github/workflows/). **Repository
-settings, tokens, and operator notes** for each workflow are documented in **comment
-headers at the top of those files** (not duplicated here).
+Workflow YAML files live under [`.github/workflows/`](.github/workflows/).
+Repository settings, tokens, and operator notes for each workflow are
+documented in comment headers at the top of those files (not duplicated here).
 
 | Workflow | Role |
 |----------|------|
-| [**rust-tests.yml**](.github/workflows/rust-tests.yml) | On **push** / **pull_request** to **main**: fmt, clippy, tests, examples, **`cargo publish --dry-run`** for both crates (matrix: Linux amd64/arm64, macOS arm64, Windows amd64). |
-| [**publish-crates.yml**](.github/workflows/publish-crates.yml) | Manual **workflow_dispatch** for crates.io **dev** / **rc** / **stable**; includes **post-publish integration** (Docker) after a successful upload. |
-| [**buf-upstream-watch.yml**](.github/workflows/buf-upstream-watch.yml) | **Schedule** (every 2 days), **workflow_dispatch**, **repository_dispatch**: proposes a bump PR when [bufbuild/buf](https://github.com/bufbuild/buf) **releases/latest** is newer than the workspace pin. |
+| [rust-tests.yml](.github/workflows/rust-tests.yml) | On push / pull_request to main: fmt, clippy, tests, examples, `cargo publish --dry-run` for both crates (matrix: Linux amd64/arm64, macOS arm64, Windows amd64). |
+| [publish-crates.yml](.github/workflows/publish-crates.yml) | Manual workflow_dispatch for crates.io dev / rc / stable; includes post-publish integration (Docker) after a successful upload. |
+| [buf-upstream-watch.yml](.github/workflows/buf-upstream-watch.yml) | Schedule (every 2 days), workflow_dispatch, repository_dispatch: proposes a bump PR when [bufbuild/buf](https://github.com/bufbuild/buf) releases/latest is newer than the workspace pin. |
 
 Maintainer-oriented detail: [`AGENTS.md`](AGENTS.md).
 
 ## License
 
-Rust sources in this repository are licensed under the MIT license — see
+Rust sources in this repository are licensed under the MIT license. See
 [LICENSE](LICENSE).
 
 The workspace does not vendor Buf binaries inside crates.io packages. The

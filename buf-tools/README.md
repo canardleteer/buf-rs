@@ -59,7 +59,7 @@ precedence):
 layout_mode = "cache-link"
 build_log = "warn"
 cache_dir = "target/buf-rs-cache"
-# Example only — align with [workspace.package].version (authoritative).
+# Example only: align with [workspace.package].version (authoritative).
 release_base_url = "https://github.com/bufbuild/buf/releases/download/v1.40.0/"
 source_base_url = "https://github.com/bufbuild/buf/archive/refs/tags/"
 ```
@@ -89,9 +89,9 @@ as binaries; use for inspection, not as the primary integrity story.
 
 ## URL overrides
 
-- `BUF_RS_RELEASE_BASE_URL` — prefix for `sha256.txt`, signatures, and binaries
+- `BUF_RS_RELEASE_BASE_URL`: prefix for `sha256.txt`, signatures, and binaries
   (default `https://github.com/bufbuild/buf/releases/download/v{X.Y.Z}/`).
-- `BUF_RS_SOURCE_BASE_URL` — prefix for optional source fetches (default
+- `BUF_RS_SOURCE_BASE_URL`: prefix for optional source fetches (default
   `https://github.com/bufbuild/buf/archive/refs/tags/`).
 
 Trailing slash optional.

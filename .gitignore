@@ -2,6 +2,7 @@
 buf-tools/bin/*
 !buf-tools/bin/.gitkeep
 .rumdl_cache/
+.middleton/
 
 # Buf images produced locally for `examples/` (see README).
 examples/proto/*.binpb
