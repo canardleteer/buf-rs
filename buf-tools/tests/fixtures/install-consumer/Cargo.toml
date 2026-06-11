@@ -1,0 +1,14 @@
+[workspace]
+
+[package]
+name = "install-consumer"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[[bin]]
+name = "install-consumer"
+path = "src/main.rs"
+
+[build-dependencies]
+buf-tools = { path = "../../../" }

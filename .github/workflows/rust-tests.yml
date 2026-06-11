@@ -53,22 +53,27 @@ jobs:
           # Linux x86_64 (amd64), Ubuntu latest image.
           - name: linux-amd64
             runs_on: ubuntu-latest
+            run_cargo_install_smoke: true
 
           # Linux ARM64 — hosted runner label per GitHub docs.
           - name: linux-arm64
             runs_on: ubuntu-24.04-arm
+            run_cargo_install_smoke: false
 
           # Optional: enable when Intel macOS capacity is acceptable.
           # - name: macos-amd64
           #   runs_on: macos-13
+          #   run_cargo_install_smoke: false
 
           # Apple Silicon macOS.
           - name: macos-arm64
             runs_on: macos-14
+            run_cargo_install_smoke: false
 
           # Windows x86_64 (Git Bash provides bash for our scripts).
           - name: windows-amd64
             runs_on: windows-2025-vs2026
+            run_cargo_install_smoke: false
 
     env:
       # Shared Buf download cache path for build.rs (matches README CI prewarm pattern).
@@ -88,6 +93,10 @@ jobs:
       # Run fmt check, clippy, workspace tests, then buf_lint + protoc_with_buf_plugins.
       - name: Run workspace CI script
         run: bash .github/ci-scripts/run-examples.sh
+
+      - name: buf-tools cargo-install layout smoke (linux-amd64)
+        if: matrix.platform.run_cargo_install_smoke
+        run: cargo test -p buf-tools --locked --test cargo_install_layout -- --ignored --test-threads=1
 
       # Packaging gate: does not upload or consume a crates.io version (no token).
       - name: cargo publish --dry-run (buf-tools, buf-toolchain)

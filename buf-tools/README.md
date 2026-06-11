@@ -41,6 +41,66 @@ Build output policy: default `build_log=warn` keeps happy paths quiet; set
 BUF_RS_LAYOUT_MODE=cache-link cargo build -p buf-tools
 ```
 
+## `cargo install` and build dependencies
+
+When your crate lists `buf-tools` as a `[build-dependencies]` entry and end
+users install it with `cargo install`, Cargo builds dependencies under a temp
+tree (for example `/tmp/cargo-install…/release/build/…/out`) rather than your
+project `target/` directory.
+
+**Default `cache` mode** works in that layout: binaries are exposed via
+compile-time `env!` paths under the dependency `OUT_DIR/bin`, and downloads use
+the shared cache (`BUF_RS_CACHE_DIR` or the platform cache dir). No project
+`target/` ancestor is required.
+
+**Non-cache modes** (`cache-link`, `cache-verified-link`, `target`) need a
+layout root. Resolution order:
+
+1. `CARGO_TARGET_DIR` when set → `$CARGO_TARGET_DIR/buf-tools/<core>/<TARGET>/`
+2. nearest `OUT_DIR` ancestor named `target` → `target/buf-tools/<core>/<TARGET>/`
+3. parent of nearest `OUT_DIR` ancestor named `build` (cargo-install temps) →
+   `<profile>/buf-tools/<core>/<TARGET>/` (for example `…/release/buf-tools/…`)
+
+During `cargo install`, step 3 applies when there is no project `target/`.
+Linked or copied binaries land under Cargo’s install temp profile directory, not
+your repo `target/`. They are not a substitute for project-local
+`target/buf-tools/…` from `cargo build`. For install flows, prefer
+`BUF_RS_LAYOUT_MODE=cache` unless you explicitly need linked bins in the install
+tree.
+
+**Custom Cargo profiles** (`[profile.foo]` in `Cargo.toml`): step 3 uses
+whatever directory parents `build/` (for example `foo/buf-tools/<core>/<TARGET>/`),
+including under `cargo install` temps.
+
+### Recovery without republishing your crate
+
+Environment variables are read at **build time** of `buf-tools` and override
+`Cargo.toml` metadata. Set them when building or installing the consumer crate.
+
+| Symptom | What to try |
+|--------|-------------|
+| `could not locate Cargo target dir from OUT_DIR` on an **old** `buf-tools` (before layout fix) | Upgrade `buf-tools` to a release containing the fix. No env var bypasses the unconditional target walk in those versions. Alternatives: use [`buf-toolchain`](../buf-toolchain/README.md) as a build dependency instead, or `cargo install buf-toolchain` if you only need the CLI. |
+| `cargo install` fails with non-default `layout_mode` in workspace metadata | `BUF_RS_LAYOUT_MODE=cache cargo install …` |
+| Need a stable writable layout root for non-cache modes | `CARGO_TARGET_DIR=/path/to/writable/dir cargo install …` |
+| Network flake or air-gapped retry | Prewarm: `BUF_RS_CACHE_DIR=… cargo build` (any crate using `buf-tools`), then `BUF_RS_CACHE_DIR=… CARGO_NET_OFFLINE=1 cargo install …` |
+| Diagnose resolution or downloads | `BUF_RS_BUILD_LOG=verbose cargo install …` |
+| Override download mirrors | `BUF_RS_RELEASE_BASE_URL`, `BUF_RS_SOURCE_BASE_URL` (see below) |
+
+Repo-local defaults without shell exports:
+
+```toml
+# .cargo/config.toml
+[env]
+BUF_RS_LAYOUT_MODE = "cache"
+# BUF_RS_CACHE_DIR = "target/buf-rs-cache"
+```
+
+Contract tests (network, opt-in locally; CI runs on linux-amd64):
+
+```bash
+cargo test -p buf-tools --locked --test cargo_install_layout -- --ignored
+```
+
 ## Build-script logging (`BUF_RS_BUILD_LOG`)
 
 - `warn` (default; `true` aliases this): warnings and failures only.

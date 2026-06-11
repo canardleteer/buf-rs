@@ -1,4 +1,5 @@
 /target
+buf-tools/tests/fixtures/**/target/
 buf-tools/bin/*
 !buf-tools/bin/.gitkeep
 .rumdl_cache/

@@ -3,6 +3,7 @@
 
 pub mod config;
 pub mod fetch;
+pub mod layout;
 pub mod lock;
 pub mod source;
 pub mod targets;

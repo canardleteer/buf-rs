@@ -192,3 +192,8 @@ mod release_targets_table;
 #[allow(dead_code)]
 #[path = "../build_support/verify.rs"]
 mod release_verify_fixtures;
+
+#[cfg(all(test, not(docsrs)))]
+#[allow(dead_code)]
+#[path = "../build_support/layout.rs"]
+mod release_layout;

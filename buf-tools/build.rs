@@ -24,6 +24,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("cargo:rerun-if-env-changed=BUF_RS_SOURCE_BASE_URL");
     println!("cargo:rerun-if-env-changed=BUF_RS_LAYOUT_MODE");
     println!("cargo:rerun-if-env-changed=BUF_RS_BUILD_LOG");
+    println!("cargo:rerun-if-env-changed=CARGO_TARGET_DIR");
     println!("cargo:rerun-if-env-changed=CARGO_NET_OFFLINE");
 
     let out_dir = PathBuf::from(env::var_os("OUT_DIR").expect("OUT_DIR"));
@@ -85,9 +86,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let layout_mode = layout_mode(cfg.layout_mode.as_deref())?;
     log_layout_mode(&layout_mode, cfg.layout_mode.as_deref(), &mut info_warn);
-    let target_layout_root = resolve_target_layout_root(&out_dir, &core, &target_triple)?;
+    let cargo_target_dir = env::var_os("CARGO_TARGET_DIR").map(PathBuf::from);
+    let target_layout_root = if matches!(layout_mode, LayoutMode::Cache) {
+        None
+    } else {
+        Some(build_support::layout::resolve_target_layout_root(
+            &out_dir,
+            cargo_target_dir.as_deref(),
+            &core,
+            &target_triple,
+        )?)
+    };
     let mode_cache_root = match layout_mode {
-        LayoutMode::Target => target_layout_root.join("cache"),
+        LayoutMode::Target => target_layout_root
+            .as_ref()
+            .expect("target layout root required for target mode")
+            .join("cache"),
         _ => {
             let cache_root = cache_root_dir(cfg.cache_dir.as_deref())?;
             cache_slot(&cache_root, &core, &target_triple)
@@ -120,15 +134,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         LayoutMode::Cache => info_warn("buf-tools: info: using default cache mode".to_string()),
         LayoutMode::CacheLink => info_warn(format!(
             "buf-tools: info: BUF_RS_LAYOUT_MODE=cache-link; linking/copying binaries into {}",
-            target_layout_root.join("bin").display()
+            target_layout_root
+                .as_ref()
+                .expect("layout root")
+                .join("bin")
+                .display()
         )),
         LayoutMode::CacheVerifiedLink => info_warn(format!(
             "buf-tools: info: BUF_RS_LAYOUT_MODE=cache-verified-link; re-verifying cache before link/copy into {}",
-            target_layout_root.join("bin").display()
+            target_layout_root
+                .as_ref()
+                .expect("layout root")
+                .join("bin")
+                .display()
         )),
         LayoutMode::Target => info_warn(format!(
             "buf-tools: info: BUF_RS_LAYOUT_MODE=target; using target-scoped cache/landing at {}",
-            target_layout_root.display()
+            target_layout_root.as_ref().expect("layout root").display()
         )),
     }
 
@@ -164,7 +186,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let bin_dir = match layout_mode {
         LayoutMode::Cache => out_dir.join("bin"),
-        _ => target_layout_root.join("bin"),
+        _ => target_layout_root
+            .as_ref()
+            .expect("layout root")
+            .join("bin"),
     };
     fs::create_dir_all(&bin_dir)?;
 
@@ -230,7 +255,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         )?);
     }
 
-    print_layout_mode_metadata(&layout_mode, &target_layout_root)?;
+    print_layout_mode_metadata(&layout_mode, target_layout_root.as_deref())?;
     print_rustc_env_paths(&bin_dir, rt.windows, source_root.as_ref())?;
     drop(slot_lock);
 
@@ -431,18 +456,6 @@ fn log_layout_mode(mode: &LayoutMode, raw_value: Option<&str>, info_warn: &mut d
     }
 }
 
-fn resolve_target_layout_root(
-    out_dir: &Path,
-    core: &str,
-    target_triple: &str,
-) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let target_dir = out_dir
-        .ancestors()
-        .find(|p| p.file_name().is_some_and(|n| n == "target"))
-        .ok_or("buf-tools: could not locate Cargo target dir from OUT_DIR")?;
-    Ok(target_dir.join("buf-tools").join(core).join(target_triple))
-}
-
 fn link_or_copy_cache_artifact(
     source: &Path,
     dest: &Path,
@@ -499,7 +512,7 @@ fn symlink_file(source: &Path, dest: &Path) -> io::Result<()> {
 
 fn print_layout_mode_metadata(
     mode: &LayoutMode,
-    target_layout_root: &Path,
+    target_layout_root: Option<&Path>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mode_value = match mode {
         LayoutMode::Cache => "cache",
@@ -508,13 +521,9 @@ fn print_layout_mode_metadata(
         LayoutMode::Target => "target",
     };
     println!("cargo:rustc-env=BUF_RS_LAYOUT_MODE_RESOLVED={mode_value}");
-    if matches!(mode, LayoutMode::Cache) {
-        println!("cargo:rustc-env=BUF_RS_BIN_LAYOUT_ROOT=");
-    } else {
-        println!(
-            "cargo:rustc-env=BUF_RS_BIN_LAYOUT_ROOT={}",
-            target_layout_root.display()
-        );
+    match target_layout_root {
+        None => println!("cargo:rustc-env=BUF_RS_BIN_LAYOUT_ROOT="),
+        Some(root) => println!("cargo:rustc-env=BUF_RS_BIN_LAYOUT_ROOT={}", root.display()),
     }
     Ok(())
 }
