@@ -39,7 +39,7 @@ enum Command {
         #[command(subcommand)]
         cmd: PublishCmd,
     },
-    /// Maintainer: set the root workspace Buf semver pin (plain `X.Y.Z`). For CI-only dev/rc
+    /// Maintainer: set the root workspace Buf semver pin (plain `X.Y.Z`). For CI-only dev/rc/hotfix
     /// pre-release suffixes on the manifest, use **`publish apply-version`** instead.
     Workspace {
         #[command(subcommand)]
@@ -62,7 +62,8 @@ enum WorkspaceCmd {
 enum PublishCmd {
     /// Print the version that would be published (no file writes).
     ///
-    /// Pass `--run-id` / `--rc-number` as empty strings when unused; see `publish_inputs::resolve_flags`.
+    /// Pass `--run-id`, `--rc-number`, and `--hotfix-number` as empty strings when unused; see
+    /// `publish_inputs::resolve_flags`.
     Resolve {
         #[arg(long)]
         channel: PublishChannel,
@@ -70,8 +71,11 @@ enum PublishCmd {
         run_id: String,
         #[arg(long, default_value = "")]
         rc_number: String,
+        #[arg(long, default_value = "")]
+        hotfix_number: String,
     },
-    /// Set `[workspace.package].version` and workspace dependency pins (dev: `-dev.RUN_ID`, rc: `-rc.N`).
+    /// Set `[workspace.package].version` and workspace dependency pins (dev: `-dev.RUN_ID`, rc:
+    /// `-rc.N`, hotfix: `-hotfix.N`).
     ApplyVersion {
         #[arg(long)]
         channel: PublishChannel,
@@ -79,6 +83,8 @@ enum PublishCmd {
         run_id: String,
         #[arg(long, default_value = "")]
         rc_number: String,
+        #[arg(long, default_value = "")]
+        hotfix_number: String,
     },
     /// Emit Markdown for `GITHUB_STEP_SUMMARY`: crate semver breakdown + resolved Buf versions.
     VerifySummary {
@@ -220,7 +226,7 @@ fn emit_verify_summary(crates_version: &str) {
     );
     println!();
     println!(
-        "> Crate **pre-release** segments (e.g. `-rc.2`, `-dev.123`) are for buf-rs packaging only; they do **not** select a Buf pre-release. **`build.rs`** always downloads the stable Buf release **`v{buf_core}`** for that core."
+        "> Crate **pre-release** segments (e.g. `-rc.2`, `-dev.123`, `-hotfix.1`) are for buf-rs packaging only; they do **not** select a Buf pre-release. **`build.rs`** always downloads the stable Buf release **`v{buf_core}`** for that core."
     );
 }
 
@@ -244,11 +250,13 @@ fn main() {
                 channel,
                 run_id,
                 rc_number,
+                hotfix_number,
             } => {
-                let flags = resolve_flags(channel, &run_id, &rc_number).unwrap_or_else(|e| {
-                    eprintln!("xtask: {e}");
-                    exit(1);
-                });
+                let flags = resolve_flags(channel, &run_id, &rc_number, &hotfix_number)
+                    .unwrap_or_else(|e| {
+                        eprintln!("xtask: {e}");
+                        exit(1);
+                    });
                 let raw = read_workspace_version(&path);
                 match flags {
                     ResolvedPublishFlags::Stable => {
@@ -267,21 +275,29 @@ fn main() {
                         let _ = must_parse_version("resolve (rc)", &out);
                         println!("{out}");
                     }
+                    ResolvedPublishFlags::Hotfix { hotfix_number: n } => {
+                        let core = semver_core(&raw);
+                        let out = format!("{core}-hotfix.{n}");
+                        let _ = must_parse_version("resolve (hotfix)", &out);
+                        println!("{out}");
+                    }
                 }
             }
             PublishCmd::ApplyVersion {
                 channel,
                 run_id,
                 rc_number,
+                hotfix_number,
             } => {
-                let flags = resolve_flags(channel, &run_id, &rc_number).unwrap_or_else(|e| {
-                    eprintln!("xtask: {e}");
-                    exit(1);
-                });
+                let flags = resolve_flags(channel, &run_id, &rc_number, &hotfix_number)
+                    .unwrap_or_else(|e| {
+                        eprintln!("xtask: {e}");
+                        exit(1);
+                    });
                 let raw = read_workspace_version(&path);
                 let new_ver = match flags {
                     ResolvedPublishFlags::Stable => {
-                        eprintln!("xtask: apply-version: channel must be dev or rc");
+                        eprintln!("xtask: apply-version: channel must be dev, rc, or hotfix");
                         exit(1);
                     }
                     ResolvedPublishFlags::Dev { run_id } => {
@@ -291,6 +307,10 @@ fn main() {
                     ResolvedPublishFlags::Rc { rc_number: n } => {
                         let core = semver_core(&raw);
                         format!("{core}-rc.{n}")
+                    }
+                    ResolvedPublishFlags::Hotfix { hotfix_number: n } => {
+                        let core = semver_core(&raw);
+                        format!("{core}-hotfix.{n}")
                     }
                 };
                 let _ = must_parse_version("apply-version", &new_ver);

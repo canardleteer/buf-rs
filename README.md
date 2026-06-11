@@ -137,8 +137,24 @@ Maintainers use this to set which upstream Buf release the workspace tracks
 Buf release, not only “moving forward.”
 
 It is not the same as `cargo xtask publish apply-version`, which the publish
-workflow uses on CI to apply `-dev.*` / `-rc.*` crate pre-release suffixes for
-`dev` / `rc` channels.
+workflow uses on CI to apply `-dev.*` / `-rc.*` / `-hotfix.*` crate pre-release
+suffixes for `dev` / `rc` / `hotfix` channels.
+
+### Crates.io publish channels (manual workflow)
+
+All channels use [publish-crates.yml](.github/workflows/publish-crates.yml)
+(`workflow_dispatch` only). Maintainer detail: [`AGENTS.md`](AGENTS.md).
+
+| Channel | Published version | When to use |
+|---------|-------------------|-------------|
+| `dev` | `{core}-dev.<run_id>` | CI pipeline validation (default) |
+| `rc` | `{core}-rc.N` | Pre-stable testing with others |
+| `hotfix` | `{core}-hotfix.N` | Post-stable buf-rs fix; same Buf `v{core}` |
+| `stable` | committed `X.Y.Z` | Intentional stable crates.io release |
+
+`hotfix` dispatches from `main` by default (`allow_hotfix_non_main` for
+exceptional non-main refs). Do not bump workspace `X.Y.Z` to ship a buf-rs-only
+fix when upstream Buf is unchanged — use `-hotfix.N` instead.
 
 Change the pin (maintainers, outside CI): confirm the release exists on
 [bufbuild/buf releases][buf-releases], then:
@@ -259,6 +275,7 @@ not only the value in `Cargo.toml`:
 
 ```bash
 TEST_CRATE_VERSION=1.41.0-rc.1 bash .github/ci-scripts/run-integration-docker.sh
+TEST_CRATE_VERSION=1.41.0-hotfix.1 bash .github/ci-scripts/run-integration-docker.sh
 ```
 
 Or pass the same string as the first argument. Requires Docker (default) or set
@@ -273,7 +290,7 @@ documented in comment headers at the top of those files (not duplicated here).
 | Workflow | Role |
 |----------|------|
 | [rust-tests.yml](.github/workflows/rust-tests.yml) | On push / pull_request to main: fmt, clippy, tests, examples, `cargo publish --dry-run` for both crates (matrix: Linux amd64/arm64, macOS arm64, Windows amd64). |
-| [publish-crates.yml](.github/workflows/publish-crates.yml) | Manual workflow_dispatch for crates.io dev / rc / stable; includes post-publish integration (Docker) after a successful upload. |
+| [publish-crates.yml](.github/workflows/publish-crates.yml) | Manual workflow_dispatch for crates.io dev / rc / hotfix / stable; includes post-publish integration (Docker) after a successful upload. |
 | [buf-upstream-watch.yml](.github/workflows/buf-upstream-watch.yml) | Schedule (every 2 days), workflow_dispatch, repository_dispatch: proposes a bump PR when [bufbuild/buf](https://github.com/bufbuild/buf) releases/latest is newer than the workspace pin. |
 
 Maintainer-oriented detail: [`AGENTS.md`](AGENTS.md).
