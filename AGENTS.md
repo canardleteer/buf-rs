@@ -313,6 +313,11 @@ Before merging risky changes:
   `cargo test -p buf-toolchain --locked --test managed_bin_layout -- --ignored`
   when changing installer logic (requires network unless the nested build’s
   temp cache is warm).
+- `buf-tools` `cargo install` layout: unit tests in `build_support/layout.rs`
+  run in normal `cargo test`; nested install smoke is
+  `cargo test -p buf-tools --locked --test cargo_install_layout -- --ignored`
+  (CI runs this on linux-amd64 only, after workspace tests warm
+  `BUF_RS_CACHE_DIR`).
 - `buf-toolchain` `[[bin]]`: Cargo only `cargo install`s crates that expose a
   binary (or installable example). The installed binary is
   `validate-cargo-buf-toolchain` (package name remains `buf-toolchain`); it
