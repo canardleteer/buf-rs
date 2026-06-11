@@ -4,7 +4,7 @@
 # --- Verify job summary — source of truth (keep in sync when changing versioning) ---
 #
 # The verify job summary lists **workspace crate semver** (full `[workspace.package].version`,
-# including `-dev`/`-rc` when present) and **Buf core** (`cargo xtask expected-buf-version`),
+# including `-dev`/`-rc`/`-hotfix` when present) and **Buf core** (`cargo xtask expected-buf-version`),
 # then the **Crates Resolved Version** subsection and **resolved buf** lines from:
 #   `cargo xtask publish verify-summary --crates-version "$(read-workspace-version.sh)"`
 #   (see `xtask/src/main.rs`, fn `emit_verify_summary`).
@@ -42,14 +42,19 @@
 # (unset repo secret and unset env secret) — safe for dry testing. Remove the TEMP **if:** on the
 # upload job when you always want **upload** to run (see comment on that job).
 #
-# Dev/rc path: `cargo xtask publish apply-version`, then `cargo generate-lockfile`, then
+# Dev/rc/hotfix path: `cargo xtask publish apply-version`, then `cargo generate-lockfile`, then
 # publish with `--allow-dirty --locked` (changes are never committed). See `xtask/` + `.cargo/config.toml`.
 #
-# `publish resolve` / `publish apply-version` always receive `--channel`, `--run-id`, and
-# `--rc-number` (empty strings when unused). For **dev**, the workflow sets `--run-id` from the
-# runner's **`GITHUB_RUN_ID`** (same value as `github.run_id`, but avoids expression edge cases).
-# `xtask/src/publish_inputs.rs` validates channel-specific rules (including rc: positive decimal,
-# no leading zeros).
+# Channels (manual workflow_dispatch only): dev → `{core}-dev.<run_id>`; rc → `{core}-rc.N`;
+# hotfix → `{core}-hotfix.N` (post-stable buf-rs fix, same Buf core — see AGENTS.md); stable →
+# committed `X.Y.Z`. **hotfix** defaults to main dispatch + `inputs.ref=main`; set
+# `allow_hotfix_non_main` for exceptional non-main refs.
+#
+# `publish resolve` / `publish apply-version` always receive `--channel`, `--run-id`, `--rc-number`,
+# and `--hotfix-number` (empty strings when unused). For **dev**, the workflow sets `--run-id` from
+# the runner's **`GITHUB_RUN_ID`** (same value as `github.run_id`, but avoids expression edge cases).
+# `xtask/src/publish_inputs.rs` validates channel-specific rules (rc/hotfix: positive decimal, no
+# leading zeros).
 #
 # =============================================================================
 name: publish-crates
@@ -58,19 +63,28 @@ on:
   workflow_dispatch:
     inputs:
       channel:
-        description: dev (default) = -dev.RUN_ID; rc = -rc.N; stable = committed X.Y.Z only
+        description: dev = -dev.RUN_ID; rc = -rc.N; hotfix = -hotfix.N; stable = committed X.Y.Z only
         type: choice
         default: dev
         options:
           - dev
           - rc
+          - hotfix
           - stable
       rc_number:
         description: For channel=rc only — positive integer (release candidate number)
         type: string
         default: ""
+      hotfix_number:
+        description: For channel=hotfix only — positive integer (hotfix release number)
+        type: string
+        default: ""
+      allow_hotfix_non_main:
+        description: For channel=hotfix only — allow ref other than main (exceptional)
+        type: boolean
+        default: false
       ref:
-        description: Git ref to checkout (this repo only). For channel=stable, must be `main` (see workflow guard). dev/rc may use other branches/SHAs.
+        description: Git ref to checkout (this repo only). For channel=stable or hotfix (unless allow_hotfix_non_main), must be `main`. dev/rc may use other branches/SHAs.
         type: string
         default: main
       confirm_stable_version:
@@ -138,11 +152,34 @@ jobs:
               ;;
           esac
 
+      - name: Hotfix publish only from main
+        if: inputs.channel == 'hotfix' && !inputs.allow_hotfix_non_main
+        run: |
+          set -euo pipefail
+          if [ "${{ github.ref }}" != "refs/heads/main" ]; then
+            echo "::error::Hotfix publish must be dispatched from the main branch (github.ref=${{ github.ref }}). Set allow_hotfix_non_main for an exceptional non-main ref."
+            exit 1
+          fi
+
+      - name: Hotfix checkout ref must be main
+        if: inputs.channel == 'hotfix' && !inputs.allow_hotfix_non_main
+        run: |
+          set -euo pipefail
+          REF="${{ inputs.ref }}"
+          case "${REF}" in
+            main|refs/heads/main) ;;
+            *)
+              echo "::error::Hotfix publish: inputs.ref must be main (got '${REF}'). Set allow_hotfix_non_main for an exceptional non-main ref."
+              exit 1
+              ;;
+          esac
+
       - name: Resolve publish version
         id: meta
         env:
           CHANNEL: ${{ inputs.channel }}
           RC_NUMBER: ${{ inputs.channel == 'rc' && inputs.rc_number || '' }}
+          HOTFIX_NUMBER: ${{ inputs.channel == 'hotfix' && inputs.hotfix_number || '' }}
         run: |
           set -euo pipefail
           if [ "${CHANNEL}" = "dev" ]; then
@@ -154,7 +191,7 @@ jobs:
           else
             RUN_ID=""
           fi
-          V="$(cargo xtask publish resolve --channel "${CHANNEL}" --run-id "${RUN_ID}" --rc-number "${RC_NUMBER}")"
+          V="$(cargo xtask publish resolve --channel "${CHANNEL}" --run-id "${RUN_ID}" --rc-number "${RC_NUMBER}" --hotfix-number "${HOTFIX_NUMBER}")"
           echo "publish_version=${V}" >> "${GITHUB_OUTPUT}"
 
       - name: Confirm stable version (type-to-confirm)
@@ -173,11 +210,12 @@ jobs:
             exit 1
           fi
 
-      - name: Apply dev/rc version to Cargo.toml (runner only)
-        if: inputs.channel == 'dev' || inputs.channel == 'rc'
+      - name: Apply dev/rc/hotfix version to Cargo.toml (runner only)
+        if: inputs.channel == 'dev' || inputs.channel == 'rc' || inputs.channel == 'hotfix'
         env:
           CHANNEL: ${{ inputs.channel }}
           RC_NUMBER: ${{ inputs.channel == 'rc' && inputs.rc_number || '' }}
+          HOTFIX_NUMBER: ${{ inputs.channel == 'hotfix' && inputs.hotfix_number || '' }}
         run: |
           set -euo pipefail
           if [ "${CHANNEL}" = "dev" ]; then
@@ -189,10 +227,10 @@ jobs:
           else
             RUN_ID=""
           fi
-          cargo xtask publish apply-version --channel "${CHANNEL}" --run-id "${RUN_ID}" --rc-number "${RC_NUMBER}"
+          cargo xtask publish apply-version --channel "${CHANNEL}" --run-id "${RUN_ID}" --rc-number "${RC_NUMBER}" --hotfix-number "${HOTFIX_NUMBER}"
 
-      - name: Regenerate Cargo.lock after dev/rc manifest version (dev/rc only)
-        if: inputs.channel == 'dev' || inputs.channel == 'rc'
+      - name: Regenerate Cargo.lock after dev/rc/hotfix manifest version (dev/rc/hotfix only)
+        if: inputs.channel == 'dev' || inputs.channel == 'rc' || inputs.channel == 'hotfix'
         run: |
           set -euo pipefail
           cargo generate-lockfile
@@ -209,7 +247,7 @@ jobs:
       - name: Set BUF_EXPECT_VERSION for build.rs / smoke tests
         run: |
           set -euo pipefail
-          if [ "${{ inputs.channel }}" = "dev" ] || [ "${{ inputs.channel }}" = "rc" ]; then
+          if [ "${{ inputs.channel }}" = "dev" ] || [ "${{ inputs.channel }}" = "rc" ] || [ "${{ inputs.channel }}" = "hotfix" ]; then
             CORE="$(cargo xtask expected-buf-version)"
             echo "BUF_EXPECT_VERSION=${CORE}" >> "${GITHUB_ENV}"
           else
@@ -220,7 +258,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "${BUF_RS_CACHE_DIR}"
-          if [ "${{ inputs.channel }}" = "dev" ] || [ "${{ inputs.channel }}" = "rc" ]; then
+          if [ "${{ inputs.channel }}" = "dev" ] || [ "${{ inputs.channel }}" = "rc" ] || [ "${{ inputs.channel }}" = "hotfix" ]; then
             cargo publish -p buf-tools --dry-run --locked --allow-dirty
             cargo publish -p buf-toolchain --dry-run --locked --allow-dirty
           else
@@ -299,11 +337,34 @@ jobs:
               ;;
           esac
 
-      - name: Apply dev/rc version to Cargo.toml (runner only)
-        if: inputs.channel == 'dev' || inputs.channel == 'rc'
+      - name: Hotfix publish only from main
+        if: inputs.channel == 'hotfix' && !inputs.allow_hotfix_non_main
+        run: |
+          set -euo pipefail
+          if [ "${{ github.ref }}" != "refs/heads/main" ]; then
+            echo "::error::Hotfix publish must be dispatched from the main branch (github.ref=${{ github.ref }}). Set allow_hotfix_non_main for an exceptional non-main ref."
+            exit 1
+          fi
+
+      - name: Hotfix checkout ref must be main
+        if: inputs.channel == 'hotfix' && !inputs.allow_hotfix_non_main
+        run: |
+          set -euo pipefail
+          REF="${{ inputs.ref }}"
+          case "${REF}" in
+            main|refs/heads/main) ;;
+            *)
+              echo "::error::Hotfix publish: inputs.ref must be main (got '${REF}'). Set allow_hotfix_non_main for an exceptional non-main ref."
+              exit 1
+              ;;
+          esac
+
+      - name: Apply dev/rc/hotfix version to Cargo.toml (runner only)
+        if: inputs.channel == 'dev' || inputs.channel == 'rc' || inputs.channel == 'hotfix'
         env:
           CHANNEL: ${{ inputs.channel }}
           RC_NUMBER: ${{ inputs.channel == 'rc' && inputs.rc_number || '' }}
+          HOTFIX_NUMBER: ${{ inputs.channel == 'hotfix' && inputs.hotfix_number || '' }}
         run: |
           set -euo pipefail
           if [ "${CHANNEL}" = "dev" ]; then
@@ -315,10 +376,10 @@ jobs:
           else
             RUN_ID=""
           fi
-          cargo xtask publish apply-version --channel "${CHANNEL}" --run-id "${RUN_ID}" --rc-number "${RC_NUMBER}"
+          cargo xtask publish apply-version --channel "${CHANNEL}" --run-id "${RUN_ID}" --rc-number "${RC_NUMBER}" --hotfix-number "${HOTFIX_NUMBER}"
 
-      - name: Regenerate Cargo.lock after dev/rc manifest version (dev/rc only)
-        if: inputs.channel == 'dev' || inputs.channel == 'rc'
+      - name: Regenerate Cargo.lock after dev/rc/hotfix manifest version (dev/rc/hotfix only)
+        if: inputs.channel == 'dev' || inputs.channel == 'rc' || inputs.channel == 'hotfix'
         run: |
           set -euo pipefail
           cargo generate-lockfile
@@ -335,7 +396,7 @@ jobs:
       - name: Set BUF_EXPECT_VERSION
         run: |
           set -euo pipefail
-          if [ "${{ inputs.channel }}" = "dev" ] || [ "${{ inputs.channel }}" = "rc" ]; then
+          if [ "${{ inputs.channel }}" = "dev" ] || [ "${{ inputs.channel }}" = "rc" ] || [ "${{ inputs.channel }}" = "hotfix" ]; then
             CORE="$(cargo xtask expected-buf-version)"
             echo "BUF_EXPECT_VERSION=${CORE}" >> "${GITHUB_ENV}"
           else
@@ -347,7 +408,7 @@ jobs:
           set -euo pipefail
           mkdir -p "${BUF_RS_CACHE_DIR}"
           FLAGS=(--locked)
-          if [ "${{ inputs.channel }}" = "dev" ] || [ "${{ inputs.channel }}" = "rc" ]; then
+          if [ "${{ inputs.channel }}" = "dev" ] || [ "${{ inputs.channel }}" = "rc" ] || [ "${{ inputs.channel }}" = "hotfix" ]; then
             FLAGS+=(--allow-dirty)
           fi
           cargo publish -p buf-tools "${FLAGS[@]}"

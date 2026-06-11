@@ -36,15 +36,19 @@ Those fields track two related notions:
 For canary publishes, crate semver must not equal the final stable slot
 (e.g. `1.40.0`) until you intentionally ship stable. The manual publish
 workflow defaults to `dev`: `{core}-dev.<github.run_id>` (pipeline validation).
-Use `rc` with `rc_number` for `{core}-rc.N` when testing with others. Never
-burn the stable slot until you intentionally ship `stable`.
+Use `rc` with `rc_number` for `{core}-rc.N` when testing with others. After
+stable `X.Y.Z` is on crates.io, use `hotfix` with `hotfix_number` for
+`{core}-hotfix.N` when buf-rs packaging needs a follow-up fix without changing the
+upstream Buf pin. Never burn the stable slot until you intentionally ship
+`stable`.
 
 Crate semver tracks the Buf binary, not an independent series. The core semver
 (before any `-` pre-release) MUST match the upstream Buf release that
-`buf --version` corresponds to. Never invent a crates-only patch such as
-`1.40.1` when Buf is still shipping `1.40.0`. If a bad publish consumes a
-semver slot on crates.io, recover with pre-release identifiers so the published
-version still reflects the same Buf release, not a fabricated crate lineage.
+`buf --version` corresponds to. Never invent a crates-only semver patch bump
+such as `1.40.1` when Buf is still shipping `1.40.0`. If stable is burned or
+needs a buf-rs-only follow-up, recover with **`-hotfix`** pre-release identifiers
+(e.g. `1.40.0-hotfix.1`) so the published version still reflects the same Buf
+release, not a fabricated crate lineage.
 
 ## `buf-tools` packaging (download at build + crates.io cap)
 
@@ -141,17 +145,22 @@ See [`.github/workflows/publish-crates.yml`](.github/workflows/publish-crates.ym
   `upload` may wait again. Tune environment rules or use a repository-level
   token if you want lighter gating.
 - Channels: `dev` (default) → `{core}-dev.<run_id>`; `rc` →
-  `{core}-rc.<rc_number>` (`rc_number` input, integer > 0); `stable` → committed
-  `X.Y.Z` only. `dev` / `rc` run `cargo xtask publish apply-version`,
-  `cargo generate-lockfile`, then `cargo publish --allow-dirty --locked`
-  (ephemeral `Cargo.toml` / `Cargo.lock`, not committed).
+  `{core}-rc.<rc_number>` (`rc_number` input, integer > 0); `hotfix` →
+  `{core}-hotfix.<hotfix_number>` (`hotfix_number` input, integer > 0); `stable`
+  → committed `X.Y.Z` only. `dev` / `rc` / `hotfix` run
+  `cargo xtask publish apply-version`, `cargo generate-lockfile`, then
+  `cargo publish --allow-dirty --locked` (ephemeral `Cargo.toml` / `Cargo.lock`,
+  not committed).
 - Stable: requires `channel=stable`, dispatch from `main`, `inputs.ref` set to
   `main`, and `confirm_stable_version` matching
   `[workspace.package].version`; no `--allow-dirty`; no in-runner ephemeral
-  manifest version (dev/rc). Use `dev` or `rc` to exercise non-`main` refs.
-- Crate pre-release vs Buf binary: Crate versions may include `-dev.*` or
-  `-rc.*` for buf-rs packaging only. `build.rs` still downloads the stable Buf
-  GitHub release `v{major}.{minor}.{patch}` from `CARGO_PKG_VERSION` (see
+  manifest version (dev/rc/hotfix). Use `dev` or `rc` to exercise non-`main`
+  refs. `hotfix` defaults to the same main-only ref policy as `stable`; set
+  `allow_hotfix_non_main` for an exceptional non-main hotfix.
+- Crate pre-release vs Buf binary: Crate versions may include `-dev.*`,
+  `-rc.*`, or `-hotfix.*` for buf-rs packaging only. `build.rs` still
+  downloads the stable Buf GitHub release `v{major}.{minor}.{patch}` from
+  `CARGO_PKG_VERSION` (see
   `buf-tools/build.rs` / `buf-toolchain/build.rs`). The verify job summary
   prints resolved buf for buf-tools and resolved buf for buf-toolchain via
   `cargo xtask publish verify-summary` (uses the `semver` crate); that output
@@ -193,8 +202,8 @@ an existing `bufbuild/buf` tag `vX.Y.Z`.
 
 This is for maintainers changing which upstream Buf release the workspace pins
 (any direction, older or newer). It is not the same as `publish apply-version`,
-which only rewrites the manifest on CI runners for `dev` / `rc` channels using
-`-dev.*` / `-rc.*` crate suffixes.
+which only rewrites the manifest on CI runners for `dev` / `rc` / `hotfix`
+channels using `-dev.*` / `-rc.*` / `-hotfix.*` crate suffixes.
 
 After running it: `cargo generate-lockfile`, then set `BUF_EXPECT_VERSION` from
 `cargo xtask expected-buf-version` and run `cargo test --workspace --locked`
