@@ -15,6 +15,20 @@ in the published crate.
 [docs-buf-toolchain]: https://docs.rs/buf-toolchain
 [docs-buf-tools]: https://docs.rs/buf-tools
 [repo-readme]: https://github.com/canardleteer/buf-rs#readme
+[repo-publish-channels]: https://github.com/canardleteer/buf-rs#cratesio-publish-channels-manual-workflow
+
+> [!IMPORTANT]
+> Our crate version matches the `buf` version. After a stable crate is released,
+> if there are fixes needed on the Rust build / dependency management side of
+> things, we release those to a `hotfix` pre-release version of the same `buf`
+> version. It's worth checking for `hotfix` versions, if you encounter build
+> problems.
+>
+> **Example:** `1.70.0-hotfix.1` publishes `buf-tools` and `buf-toolchain` hotfix
+> builds at the same Buf core.
+>
+> See [crates.io publish channels][repo-publish-channels] in the repository
+> README.
 
 ## What this crate does
 

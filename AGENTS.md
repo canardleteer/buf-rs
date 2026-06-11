@@ -84,6 +84,18 @@ Documentation that must stay in sync when keys/preference/precedence change:
 - [`buf-tools/README.md`](buf-tools/README.md)
 - workspace [`README.md`](README.md)
 
+Consumer-facing **`> [!IMPORTANT]`** hotfix callout (crate version tracks Buf;
+post-stable buf-rs fixes ship as `{core}-hotfix.N`; illustrative example line):
+keep these three aligned when the message or example changes:
+
+- workspace [`README.md`](README.md)
+- [`buf-tools/README.md`](buf-tools/README.md) (ships on crates.io / docs.rs)
+- [`buf-toolchain/README.md`](buf-toolchain/README.md) (ships on crates.io /
+  docs.rs)
+
+The root README uses a repo-local anchor for publish channels; crate READMEs
+link `[repo-publish-channels]` to the same section on GitHub.
+
 ## Documentation Style Guide (markdown files)
 
 Write like you are explaining something to a colleague. Be direct, specific,

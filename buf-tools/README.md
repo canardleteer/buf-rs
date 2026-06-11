@@ -12,6 +12,20 @@ The repository overview is in the
 [crates-buf-tools]: https://crates.io/crates/buf-tools
 [docs-buf-tools]: https://docs.rs/buf-tools
 [repo-readme]: https://github.com/canardleteer/buf-rs#readme
+[repo-publish-channels]: https://github.com/canardleteer/buf-rs#cratesio-publish-channels-manual-workflow
+
+> [!IMPORTANT]
+> Our crate version matches the `buf` version. After a stable crate is released,
+> if there are fixes needed on the Rust build / dependency management side of
+> things, we release those to a `hotfix` pre-release version of the same `buf`
+> version. It's worth checking for `hotfix` versions, if you encounter build
+> problems.
+>
+> **Example:** `1.70.0-hotfix.1` fixes buf-tools under `cargo install` when it is
+> a build dependency.
+>
+> See [crates.io publish channels][repo-publish-channels] in the repository
+> README.
 
 ## What this crate does
 
