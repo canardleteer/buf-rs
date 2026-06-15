@@ -28,6 +28,6 @@ jobs:
     steps:
       - uses: actions/checkout@v6.0.2
 
-      - uses: rvben/rumdl@v0.2.2
+      - uses: rvben/rumdl@v0
         with:
           config: .rumdl.toml
