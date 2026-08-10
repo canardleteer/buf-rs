@@ -1,5 +1,7 @@
 # -----------------------------------------------------------------------------
-# Markdown hygiene (rumdl) on pull requests that touch root- or crate-level *.md.
+# Markdown hygiene (rumdl) on pull requests targeting main.
+# Always runs (no path filters) so the required `rumdl` status check reports on
+# every PR; otherwise Cargo-only bumps stay blocked waiting for the check.
 # Config: .rumdl.toml at repo root. Does not run on push (PR gate only).
 # -----------------------------------------------------------------------------
 name: Markdown Hygiene
@@ -8,11 +10,6 @@ on:
   pull_request:
     branches:
       - main
-    paths:
-      - "*.md"
-      - "buf-tools/*.md"
-      - "buf-toolchain/*.md"
-      - "examples/*.md"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -28,6 +25,6 @@ jobs:
     steps:
       - uses: actions/checkout@v6.0.2
 
-      - uses: rvben/rumdl@v0.2.2
+      - uses: rvben/rumdl@v0
         with:
           config: .rumdl.toml
