@@ -270,6 +270,10 @@ cargo test --workspace --locked
 - `cargo xtask expected-buf-version` reads `[workspace.package].version` in the
   root `Cargo.toml`.
 - You can set `BUF_EXPECT_VERSION` manually instead if you prefer.
+- Workspace tests include a nested `DOCS_RS=1` rustdoc smoke for both
+  crates (no network). See [buf-tools/README.md](buf-tools/README.md)
+  (Documentation builds) and
+  [buf-toolchain/README.md](buf-toolchain/README.md).
 
 ### Post-publish testing
 

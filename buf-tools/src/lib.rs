@@ -54,6 +54,17 @@ pub fn upstream_source_root() -> Option<PathBuf> {
     }
 }
 
+/// Whether this crate was compiled under docs.rs (`DOCS_RS=1`).
+///
+/// When `true`, path accessors point at non-functional 12 KiB placeholders
+/// (ELF or MZ magic only). Do not execute them. Consumer documentation
+/// builds should skip live `buf` invocation and use a packaged descriptor
+/// instead.
+#[must_use]
+pub fn compiled_for_docs_rs() -> bool {
+    matches!(option_env!("BUF_RS_DOCS_RS"), Some(s) if !s.is_empty())
+}
+
 #[cfg(all(test, not(docsrs)))]
 mod tests {
     use std::fs;
@@ -141,6 +152,10 @@ mod tests {
         if mode == "cache" {
             assert!(crate::bin_layout_root().is_none());
         }
+        assert!(
+            !crate::compiled_for_docs_rs(),
+            "normal builds must not set BUF_RS_DOCS_RS"
+        );
     }
 
     fn assert_plugin_payload(p: &Path) {
@@ -179,6 +194,85 @@ mod tests {
             "expected extracted buf repo layout under {:?}",
             root
         );
+    }
+}
+
+#[cfg(all(test, docsrs))]
+mod docs_rs_tests {
+    use std::fs;
+    use std::io::Read;
+    use std::path::Path;
+
+    const STUB_LEN: u64 = 12_000;
+
+    #[test]
+    fn compiled_for_docs_rs_is_true() {
+        assert!(crate::compiled_for_docs_rs());
+    }
+
+    #[test]
+    fn layout_metadata_is_cache_mode() {
+        assert_eq!(crate::resolved_layout_mode(), "cache");
+        assert!(crate::bin_layout_root().is_none());
+        assert!(crate::upstream_source_root().is_none());
+    }
+
+    #[test]
+    fn accessors_point_at_placeholder_bins() {
+        let expected = if cfg!(windows) {
+            [
+                ("buf.exe", crate::buf_bin_path()),
+                (
+                    "protoc-gen-buf-breaking.exe",
+                    crate::protoc_gen_buf_breaking_bin_path(),
+                ),
+                (
+                    "protoc-gen-buf-lint.exe",
+                    crate::protoc_gen_buf_lint_bin_path(),
+                ),
+            ]
+        } else {
+            [
+                ("buf", crate::buf_bin_path()),
+                (
+                    "protoc-gen-buf-breaking",
+                    crate::protoc_gen_buf_breaking_bin_path(),
+                ),
+                ("protoc-gen-buf-lint", crate::protoc_gen_buf_lint_bin_path()),
+            ]
+        };
+
+        for (name, path) in expected {
+            assert_placeholder_bin(&path, name);
+        }
+    }
+
+    fn assert_placeholder_bin(path: &Path, file_name: &str) {
+        assert_eq!(
+            path.file_name().and_then(|n| n.to_str()),
+            Some(file_name),
+            "unexpected file name for {path:?}"
+        );
+        assert_eq!(
+            path.parent()
+                .and_then(|p| p.file_name())
+                .and_then(|n| n.to_str()),
+            Some("bin"),
+            "docs.rs placeholders must live under OUT_DIR/bin, got {path:?}"
+        );
+        assert!(path.is_file(), "missing placeholder {path:?}");
+        let meta = fs::metadata(path).unwrap();
+        assert_eq!(meta.len(), STUB_LEN, "{path:?} stub size");
+        let mut magic = [0u8; 4];
+        fs::File::open(path)
+            .unwrap()
+            .read_exact(&mut magic)
+            .unwrap();
+        if cfg!(windows) {
+            assert_eq!(&magic[..2], b"MZ", "{path:?} missing MZ magic");
+        } else {
+            assert_eq!(&magic[..4], b"\x7fELF", "{path:?} missing ELF magic");
+        }
     }
 }
 

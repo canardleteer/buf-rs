@@ -71,6 +71,19 @@ Validation helper (`validate-cargo-buf-toolchain` binary):
 Options that apply only when depending on `buf-tools` directly (layout, build
 log, source bundles) are documented in the [buf-tools docs][docs-buf-tools].
 
+## Documentation builds (docs.rs)
+
+docs.rs sets `DOCS_RS=1` and blocks network. `build.rs` returns before any
+download or install into `$CARGO_HOME/bin`. The library does not expose
+install paths via `env!`; rustdoc only needs the build script to succeed.
+
+Local check (no network; `cargo test --workspace` already runs this):
+
+```bash
+DOCS_RS=1 CARGO_NET_OFFLINE=true \
+  cargo doc -p buf-toolchain --locked --offline --no-deps
+```
+
 ## Concurrent cache writers
 
 The same cache-slot lock as `buf-tools` serializes writers under

@@ -23,6 +23,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("cargo:rerun-if-env-changed=BUF_RS_RELEASE_BASE_URL");
     println!("cargo:rerun-if-env-changed=CARGO_HOME");
     println!("cargo:rerun-if-env-changed=CARGO_NET_OFFLINE");
+    println!("cargo:rerun-if-env-changed=DOCS_RS");
+    println!("cargo:rustc-check-cfg=cfg(docsrs)");
+
+    if env::var_os("DOCS_RS").is_some() {
+        // docs.rs: no network, no writes outside OUT_DIR. The library does not
+        // env! install paths; rustdoc only needs this script to succeed.
+        println!("cargo:rustc-cfg=docsrs");
+        return Ok(());
+    }
 
     let target_triple = env::var("TARGET")?;
     let pkg_version = env::var("CARGO_PKG_VERSION")?;

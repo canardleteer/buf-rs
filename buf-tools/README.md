@@ -148,6 +148,28 @@ package metadata → environment (and optional `.cargo/config.toml` `[env]`).
 
 HTTPS GET to `github.com` only; no GitHub token required for release downloads.
 
+## Documentation builds (docs.rs)
+
+docs.rs sets `DOCS_RS=1` and blocks network. `build.rs` then skips GitHub
+downloads, writes 12 KiB ELF or MZ placeholders under `OUT_DIR/bin`, and
+emits cache-mode layout metadata (`resolved_layout_mode()` is `"cache"`,
+`bin_layout_root()` is `None`). It does not walk `OUT_DIR` for a `target/`
+ancestor.
+
+`compiled_for_docs_rs()` is `true` in that build. Path accessors still
+compile, but the files are not the Buf CLI. Do not execute them from a
+consumer `build.rs` during documentation builds. Package a generated
+descriptor (or skip live `buf`) when `compiled_for_docs_rs()` is true.
+
+Local check (no network; `cargo test --workspace` already runs this):
+
+```bash
+DOCS_RS=1 CARGO_NET_OFFLINE=true \
+  cargo test -p buf-tools --locked --offline --lib
+DOCS_RS=1 CARGO_NET_OFFLINE=true \
+  cargo doc -p buf-tools --locked --offline --no-deps
+```
+
 ## Cache layout
 
 Artifacts live under `$BUF_RS_CACHE_DIR/<semver-core>/<TARGET>/` when set,

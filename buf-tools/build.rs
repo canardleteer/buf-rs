@@ -26,14 +26,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("cargo:rerun-if-env-changed=BUF_RS_BUILD_LOG");
     println!("cargo:rerun-if-env-changed=CARGO_TARGET_DIR");
     println!("cargo:rerun-if-env-changed=CARGO_NET_OFFLINE");
+    println!("cargo:rerun-if-env-changed=DOCS_RS");
+    println!("cargo:rustc-check-cfg=cfg(docsrs)");
 
     let out_dir = PathBuf::from(env::var_os("OUT_DIR").expect("OUT_DIR"));
     let target_triple = env::var("TARGET")?;
     let pkg_version = env::var("CARGO_PKG_VERSION")?;
 
     if env::var_os("DOCS_RS").is_some() {
-        write_docs_rs_stubs(&out_dir, target_triple.contains("windows"))?;
-        print_rustc_env_paths(&out_dir, target_triple.contains("windows"), None)?;
+        // Cache mode only: do not walk OUT_DIR for a target/ layout root
+        // (same contract as e772937 for cargo-install consumers).
+        let windows = target_triple.contains("windows");
+        let bin_dir = out_dir.join("bin");
+        write_docs_rs_stubs(&out_dir, windows)?;
+        println!("cargo:rustc-cfg=docsrs");
+        println!("cargo:rustc-env=BUF_RS_DOCS_RS=1");
+        print_layout_mode_metadata(&LayoutMode::Cache, None)?;
+        print_rustc_env_paths(&bin_dir, windows, None)?;
         return Ok(());
     }
 

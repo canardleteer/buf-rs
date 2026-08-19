@@ -339,6 +339,14 @@ Before merging risky changes:
   `cargo test -p buf-tools --locked --test cargo_install_layout -- --ignored`
   (CI runs this on linux-amd64 only, after workspace tests warm
   `BUF_RS_CACHE_DIR`).
+- docs.rs: `DOCS_RS=1` must stay **cache** layout with no
+  `resolve_target_layout_root` walk (same contract as the cargo-install
+  hotfix). `buf-tools` writes placeholders under `OUT_DIR/bin` and emits
+  layout `env!` values; `buf-toolchain` returns before HTTP or
+  `$CARGO_HOME/bin` writes. Workspace `cargo test` runs nested
+  `DOCS_RS=1` `cargo test --lib` / `cargo doc --no-deps` for both crates
+  (`buf-tools/tests/docs_rs_build.rs`,
+  `buf-toolchain/tests/docs_rs_build.rs`).
 - `buf-toolchain` `[[bin]]`: Cargo only `cargo install`s crates that expose a
   binary (or installable example). The installed binary is
   `validate-cargo-buf-toolchain` (package name remains `buf-toolchain`); it

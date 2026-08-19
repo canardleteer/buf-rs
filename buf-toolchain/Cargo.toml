@@ -20,6 +20,10 @@ include = [
     "build_support/**/*.rs",
 ]
 
+[package.metadata.docs.rs]
+rustc-args = ["--cfg", "docsrs"]
+rustdoc-args = ["--cfg", "docsrs"]
+
 [[bin]]
 name = "validate-cargo-buf-toolchain"
 path = "src/main.rs"
