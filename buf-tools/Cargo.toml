@@ -30,6 +30,7 @@ bench = false
 
 [package.metadata.docs.rs]
 rustc-args = ["--cfg", "docsrs"]
+rustdoc-args = ["--cfg", "docsrs"]
 
 [package.metadata.buf-tools.targets.Linux-x86_64]
 min_version = "1.0.0"
