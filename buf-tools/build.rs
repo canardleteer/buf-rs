@@ -342,7 +342,8 @@ fn cache_root_dir(override_value: Option<&str>) -> Result<PathBuf, Box<dyn std::
         fs::create_dir_all(&pb)?;
         return Ok(pb);
     }
-    let base = dirs::cache_dir().ok_or("could not resolve cache dir (set BUF_RS_CACHE_DIR)")?;
+    let base = build_support::paths::cache_dir()
+        .ok_or("could not resolve cache dir (set BUF_RS_CACHE_DIR)")?;
     Ok(base.join("buf-tools"))
 }
 

@@ -191,7 +191,7 @@ fn resolve_cache_root() -> Result<PathBuf, String> {
     if let Ok(dir) = env::var("BUF_RS_CACHE_DIR") {
         return Ok(PathBuf::from(dir));
     }
-    dirs::cache_dir()
+    build_support::paths::cache_dir()
         .ok_or_else(|| "buf-toolchain: cannot resolve cache dir".to_string())
         .map(|p| p.join("buf-toolchain"))
 }
@@ -200,7 +200,8 @@ fn cargo_home_dir() -> Result<PathBuf, String> {
     if let Ok(home) = env::var("CARGO_HOME") {
         return Ok(PathBuf::from(home));
     }
-    let home = dirs::home_dir().ok_or_else(|| "buf-toolchain: cannot resolve HOME".to_string())?;
+    let home = build_support::paths::home_dir()
+        .ok_or_else(|| "buf-toolchain: cannot resolve HOME".to_string())?;
     Ok(home.join(".cargo"))
 }
 

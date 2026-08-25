@@ -173,7 +173,8 @@ DOCS_RS=1 CARGO_NET_OFFLINE=true \
 ## Cache layout
 
 Artifacts live under `$BUF_RS_CACHE_DIR/<semver-core>/<TARGET>/` when set,
-otherwise under the platform cache dir (via the `dirs` crate), e.g.
+otherwise under the platform cache dir (`XDG_CACHE_HOME`, `%LOCALAPPDATA%` on
+Windows, `~/Library/Caches` on macOS, or `~/.cache` elsewhere), e.g.
 `XDG_CACHE_HOME/buf-tools/...`. A successful download survives `cargo clean`
 for that cache root.
 

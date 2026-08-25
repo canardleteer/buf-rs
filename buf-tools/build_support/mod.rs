@@ -5,6 +5,7 @@ pub mod config;
 pub mod fetch;
 pub mod layout;
 pub mod lock;
+pub mod paths;
 pub mod source;
 pub mod targets;
 pub mod verify;
