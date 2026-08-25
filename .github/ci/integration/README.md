@@ -25,7 +25,7 @@ RUST_DOCKER_TAG="$(bash .github/ci-scripts/rust-docker-tag-from-toolchain.sh rus
 docker build --build-arg "RUST_DOCKER_TAG=${RUST_DOCKER_TAG}" …
 ```
 
-**[`run-integration-docker.sh`](../../ci-scripts/run-integration-docker.sh)** and **`post-publish-integration`** in **[`publish-crates.yml`](../../workflows/publish-crates.yml)** do this for you. Inside the image, **`rust-toolchain.toml`** still selects the exact **`channel`** (patch + components); the base image only needs the matching **major.minor** line.
+**[`run-integration-docker.sh`](../../ci-scripts/run-integration-docker.sh)** and **`post-publish-integration`** in **[`publish-crates.yml`](../../workflows/publish-crates.yml)** do this for you. Inside the image, **`rust-toolchain.toml`** still selects the **`channel`** (`stable` plus components). When channel is `stable`, the script prints **`slim-bookworm`**. The workflow build sets **`pull: true`** so cache does not freeze an old `rust:slim-bookworm`.
 
 ## Caching
 

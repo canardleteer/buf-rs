@@ -267,39 +267,41 @@ tree after `cargo publish -p … --dry-run`.
   publish from the bump branch, and branch naming (`automated/buf/X.Y.Z`) are
   documented in that file’s header comments (and in the generated PR body).
 
-## `rust-toolchain.toml` (pinned Rust toolchain)
+## `rust-toolchain.toml` (Rust toolchain channel)
 
-The repo root [`rust-toolchain.toml`](rust-toolchain.toml) sets `channel` to an
-explicit stable release (e.g. `1.96.0`), not the bare `stable` channel string,
-so resolution is reproducible. Today’s pin is `1.96.0` because that is the
-current latest stable on [releases.rs](https://releases.rs). As new stables
-ship, maintainers should bump `channel` (and aligned bits below) to track
-latest stable, unless the project deliberately stays on an older compiler
-(document that choice).
+The repo root [`rust-toolchain.toml`](rust-toolchain.toml) sets `channel` to
+`stable` so local rustup and CI track latest stable. `components` (`rustfmt`,
+`clippy`) live in that file too.
 
-Whenever you edit [`rust-toolchain.toml`](rust-toolchain.toml), bump, tweak
-`components`, or otherwise touch the file, check [releases.rs](https://releases.rs)
-so you know whether you are staying on latest stable, intentionally behind, or
-intentionally pinning a specific release for another reason.
+GitHub Actions install the same compiler channel explicitly:
 
-`components` (e.g. `rustfmt`, `clippy`) live in that file too. GitHub Actions
-uses `dtolnay/rust-toolchain@stable` without duplicate `toolchain:` /
-`components:` inputs; rustup applies the workspace `rust-toolchain.toml` when
-`cargo` / `rustc` run in the repo.
+    uses: dtolnay/rust-toolchain@stable
+    with:
+      toolchain: stable
+      components: rustfmt, clippy
 
-Keep these aligned on the same Rust release line when you bump the pin:
+The action tag `@stable` is the action version. `toolchain: stable` is rustc.
+Pass `components` in the workflow because the action’s `toolchain:` input
+overrides file-based toolchain selection. Keep the YAML `components` list
+aligned with [`rust-toolchain.toml`](rust-toolchain.toml).
 
-- `rust-toolchain.toml` `channel` (and `components`)
-- Integration Docker base: `Dockerfile` `ARG RUST_DOCKER_TAG` →
-  `FROM rust:${RUST_DOCKER_TAG}`. CI and
-  [`.github/ci-scripts/run-integration-docker.sh`](.github/ci-scripts/run-integration-docker.sh)
-  pass `RUST_DOCKER_TAG` from
-  [`.github/ci-scripts/rust-docker-tag-from-toolchain.sh`](.github/ci-scripts/rust-docker-tag-from-toolchain.sh)
-  applied to `rust-toolchain.toml`
-  (maps `channel = "X.Y.Z"` → `X.Y-slim-bookworm`; Docker Hub has no `X.Y.Z`
-  patch tags on `library/rust`). Bumping `[toolchain].channel` updates the
-  build-arg automatically; GHA layer cache invalidates when
-  `rust-toolchain.toml` / `Dockerfile` / context change.
+CI and local builds float with new Rust stables. Clippy or rustfmt can fail
+on `main` when a stable ships; fix those in a follow-up. Consumer MSRV for
+published crates stays `edition = "2024"` (Rust 1.85+) plus dependency
+`rust-version` floors. This repo does not set `package.rust-version`.
+
+Do not switch `channel` to an explicit `X.Y.Z` unless you intentionally freeze
+the compiler. If you do, document why.
+
+Integration Docker base: `Dockerfile` `ARG RUST_DOCKER_TAG` →
+`FROM rust:${RUST_DOCKER_TAG}`. CI and
+[`.github/ci-scripts/run-integration-docker.sh`](.github/ci-scripts/run-integration-docker.sh)
+pass `RUST_DOCKER_TAG` from
+[`.github/ci-scripts/rust-docker-tag-from-toolchain.sh`](.github/ci-scripts/rust-docker-tag-from-toolchain.sh)
+applied to `rust-toolchain.toml` (`channel = "stable"` → `slim-bookworm`;
+`channel = "X.Y.Z"` → `X.Y-slim-bookworm` because Docker Hub has no `X.Y.Z`
+patch tags on `library/rust`). The publish integration image build sets
+`pull: true` so GHA layer cache does not freeze an old `rust:slim-bookworm`.
 
 ## Post-publish Docker integration (`.github/ci/integration/`)
 

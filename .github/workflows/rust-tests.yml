@@ -82,13 +82,16 @@ jobs:
     steps:
       # Fetch full git history (default depth is enough for this repo).
       - name: Checkout repository
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@v7.0.1
         with:
           ref: ${{ inputs.ref || github.ref }}
 
-      # Bootstrap rustup; channel + components come from repo-root rust-toolchain.toml (single source of truth).
+      # Bootstrap rustup; compiler channel is stable (same as rust-toolchain.toml).
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
 
       # Run fmt check, clippy, workspace tests, then buf_lint + protoc_with_buf_plugins.
       - name: Run workspace CI script
@@ -112,12 +115,15 @@ jobs:
       contents: read
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@v7.0.1
         with:
           ref: ${{ inputs.ref || github.ref }}
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
 
       - name: cargo audit
         uses: rustsec/audit-check@v2.0.0

@@ -89,13 +89,16 @@ jobs:
           echo "name=${name}" >> "${GITHUB_OUTPUT}"
 
       - name: Checkout repository
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@v7.0.1
         with:
           ref: ${{ steps.default_branch.outputs.name }}
           fetch-depth: 0
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
 
       - name: Read optional version hint from event
         id: hint
