@@ -291,3 +291,8 @@ mod release_verify_fixtures;
 #[allow(dead_code)]
 #[path = "../build_support/layout.rs"]
 mod release_layout;
+
+#[cfg(all(test, not(docsrs)))]
+#[allow(dead_code)]
+#[path = "../build_support/paths.rs"]
+mod release_paths;

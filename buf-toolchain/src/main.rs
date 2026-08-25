@@ -6,6 +6,10 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
+#[allow(dead_code)]
+#[path = "../build_support/paths.rs"]
+mod paths;
+
 use buf_toolchain::targets::from_rust_triple;
 use buf_toolchain::upstream::{
     extract_installed_buf_core, report_newer_and_crates_io, verify_binaries_against_github_release,
@@ -195,7 +199,7 @@ fn cargo_home_bin() -> PathBuf {
     if let Ok(home) = env::var("CARGO_HOME") {
         return PathBuf::from(home).join("bin");
     }
-    match dirs::home_dir() {
+    match paths::home_dir() {
         Some(h) => h.join(".cargo").join("bin"),
         None => PathBuf::from(".cargo").join("bin"),
     }
