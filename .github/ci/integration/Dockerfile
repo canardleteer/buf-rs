@@ -1,9 +1,9 @@
 # Post-publish integration image — build context is staged by CI or .github/ci-scripts/run-integration-docker.sh
 # (rust-toolchain.toml, this Cargo.toml, entrypoint.sh, examples *.rs + proto/). No workspace root.
 #
-# RUST_DOCKER_TAG must match [toolchain].channel in rust-toolchain.toml (major.minor-slim-bookworm).
-# CI and run-integration-docker.sh set it via .github/ci-scripts/rust-docker-tag-from-toolchain.sh
-# so the base image tracks the same release line as rust-toolchain.toml without hardcoding here.
+# RUST_DOCKER_TAG comes from rust-toolchain.toml via
+# rust-docker-tag-from-toolchain.sh (`stable` → slim-bookworm).
+# CI and run-integration-docker.sh set it so the base image is not hardcoded here.
 ARG RUST_DOCKER_TAG
 FROM rust:${RUST_DOCKER_TAG}
 
@@ -14,7 +14,7 @@ RUN apt-get update \
 WORKDIR /app
 
 COPY rust-toolchain.toml ./
-# Toolchain patch + components come from rust-toolchain.toml (directory override); no rustup default.
+# Channel + components come from rust-toolchain.toml (directory override); no rustup default.
 
 COPY Cargo.toml ./
 COPY buf_lint.rs protoc_with_buf_plugins.rs ./
