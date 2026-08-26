@@ -255,7 +255,8 @@ tree after `cargo publish -p … --dry-run`.
   test`, both `buf-tools-examples` examples via
   [`.github/ci-scripts/run-examples.sh`](.github/ci-scripts/run-examples.sh),
   then `cargo publish -p buf-tools --dry-run --locked` and `buf-toolchain` (no
-  token; packaging gate).
+  token; packaging gate). A separate `audit` job runs `cargo deny check
+  licenses sources` ([`deny.toml`](deny.toml)) and `cargo audit`.
 - Publish:
   [`.github/workflows/publish-crates.yml`](.github/workflows/publish-crates.yml),
   manual only (see **Publishing** above).
