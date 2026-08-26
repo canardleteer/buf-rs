@@ -132,24 +132,26 @@ jobs:
           cache-targets: false
           shared-key: audit
 
-      - name: Cache rustsec advisory-db
-        uses: actions/cache@v4.3.0
+      - name: Cache rustsec advisory-db and audit tools
+        uses: actions/cache@v6.1.0
         with:
-          path: ~/.cargo/advisory-db
-          key: rustsec-advisory-db-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+          path: |
+            ~/.cargo/advisory-db
+            ~/.cargo/bin/cargo-deny
+            ~/.cargo/bin/cargo-audit
+          key: audit-tools-${{ runner.os }}-deny0.20.2-audit0.22.2-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
-            rustsec-advisory-db-${{ runner.os }}-
+            audit-tools-${{ runner.os }}-deny0.20.2-audit0.22.2-
+            audit-tools-${{ runner.os }}-
 
       - name: Install cargo-binstall
         uses: cargo-bins/cargo-binstall@v1.22.0
 
-      - name: Install cargo-deny
-        run: cargo binstall --no-confirm --disable-strategies compile cargo-deny@0.20.2
+      - name: Install cargo-deny and cargo-audit
+        run: cargo binstall --no-confirm --disable-strategies compile cargo-deny@0.20.2 cargo-audit@0.22.2
 
       - name: cargo deny
         run: cargo deny check licenses sources
 
       - name: cargo audit
-        uses: rustsec/audit-check@v2.0.0
-        with:
-          token: ${{ github.token }}
+        run: cargo audit

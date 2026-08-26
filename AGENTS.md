@@ -256,7 +256,7 @@ tree after `cargo publish -p … --dry-run`.
   [`.github/ci-scripts/run-examples.sh`](.github/ci-scripts/run-examples.sh),
   then `cargo publish -p buf-tools --dry-run --locked` and `buf-toolchain` (no
   token; packaging gate). A separate `audit` job runs `cargo deny check
-  licenses sources` ([`deny.toml`](deny.toml)) and `cargo audit`.
+  licenses sources` ([`.deny.toml`](.deny.toml)) and `cargo audit`.
 - Publish:
   [`.github/workflows/publish-crates.yml`](.github/workflows/publish-crates.yml),
   manual only (see **Publishing** above).
@@ -411,9 +411,9 @@ stay in sync.
 
 ### MAINTAINER NOTE: when adding/removing a target or changing a floor
 
-The per-target floor table lives in three places by design (Rust drives
-behavior; manifest metadata and README mirror it for tooling and humans).
-Update all three in the same change:
+The per-target floor table lives in four places by design (Rust drives
+behavior; manifest metadata, README, and cargo-deny mirror it). Update
+all four in the same change:
 
 1. `pub const ALL` and `from_rust_triple` in
    [`buf-tools/build_support/targets.rs`](buf-tools/build_support/targets.rs)
@@ -423,9 +423,12 @@ Update all three in the same change:
    readable via `cargo metadata`).
 3. The "Supported targets" matrix in top-level [`README.md`](README.md)
    (front-of-listing visibility for `cargo add` users).
+4. `[graph].targets` in [`.deny.toml`](.deny.toml) (same `rust_triples` as
+   (2), so license/source checks cover every supported host, not only CI).
 
 The `cargo_metadata_matches_rust_const` `#[test]` catches drift between (1) and
-(2), but not README drift; keep (3) in sync by hand. If you raise a target's
+(2), but not README or `.deny.toml` drift; keep (3) and (4) in sync by hand.
+If you raise a target's
 `min_version`, also confirm whether
 [`PREHASHED_MINISIGN_MIN_VERSION`](buf-tools/build_support/verify.rs) still
 describes the upstream signing-algorithm boundary; if Buf flips again, update
