@@ -7,9 +7,10 @@
 [graph]
 # Match what `cargo metadata` sees for this workspace (including examples/xtask).
 all-features = false
-# Every rustc triple listed under `[package.metadata.buf-tools.targets]` in
-# buf-tools/Cargo.toml (not just the CI matrix). Keep in sync when adding a
-# target; see AGENTS.md "when adding/removing a target".
+# Hosts for license/source checks: union of rustc triples implied by
+# Cargo.toml, buf-tools/Cargo.toml, and buf-toolchain/Cargo.toml (today:
+# rust_triples under [package.metadata.buf-tools.targets]). Not the CI
+# matrix. Keep in sync when those manifests change; see AGENTS.md.
 targets = [
     "x86_64-unknown-linux-gnu",
     "x86_64-unknown-linux-musl",
