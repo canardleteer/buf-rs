@@ -1,0 +1,36 @@
+# cargo-deny: license + source policy for the workspace graph.
+# CI: rust-tests.yml `audit` job (`cargo deny check licenses sources`).
+# Docs: https://embarkstudios.github.io/cargo-deny/
+
+[graph]
+# Match what `cargo metadata` sees for this workspace (including examples/xtask).
+all-features = false
+
+[licenses]
+# Closed allow-list. Anything else needs a crate-level exception below, not a
+# silent expansion of this list.
+unused-allowed-license = "allow"
+confidence-threshold = 0.8
+include-dev = true
+allow = [
+    "MIT",
+    "BSD-3-Clause",
+    "BSD-2-Clause",
+    "Apache-2.0",
+    "ISC",
+    "Zlib",
+]
+
+exceptions = [
+    # Mozilla/CCADB CA bundle, pulled in by ureq's default rustls roots.
+    # CDLA-Permissive-2.0: redistribute the data with the license text; not copyleft.
+    { crate = "webpki-roots", allow = ["CDLA-Permissive-2.0"] },
+    # Unicode data files shipped with the identifier crate (AND'd with MIT/Apache-2.0).
+    { crate = "unicode-ident", allow = ["Unicode-3.0"] },
+]
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []
