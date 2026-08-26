@@ -407,7 +407,14 @@ fast-fails before any HTTP if the crate's pinned Buf version predates the
 target's floor. The same table is mirrored in
 `[package.metadata.buf-tools.targets]` of [`buf-tools/Cargo.toml`](buf-tools/Cargo.toml)
 for `cargo metadata` / crates.io discovery, and a `#[test]` enforces the two
-stay in sync.
+stay in sync. `[graph].targets` in [`.deny.toml`](.deny.toml) is derived from
+the workspace manifests ([`Cargo.toml`](Cargo.toml),
+[`buf-tools/Cargo.toml`](buf-tools/Cargo.toml),
+[`buf-toolchain/Cargo.toml`](buf-toolchain/Cargo.toml)): today that is the
+union of `rust_triples` under `[package.metadata.buf-tools.targets]`. If any of
+those three files gains a new host (metadata, `cfg`, or target-specific deps),
+add the matching rustc triple to `[graph].targets`. cargo-deny also accepts
+`deny.toml` or `.cargo/deny.toml`.
 
 ### MAINTAINER NOTE: when adding/removing a target or changing a floor
 
@@ -423,11 +430,17 @@ all four in the same change:
    readable via `cargo metadata`).
 3. The "Supported targets" matrix in top-level [`README.md`](README.md)
    (front-of-listing visibility for `cargo add` users).
-4. `[graph].targets` in [`.deny.toml`](.deny.toml) (same `rust_triples` as
-   (2), so license/source checks cover every supported host, not only CI).
+4. `[graph].targets` in [`.deny.toml`](.deny.toml), sourced from
+   [`Cargo.toml`](Cargo.toml), [`buf-tools/Cargo.toml`](buf-tools/Cargo.toml),
+   and [`buf-toolchain/Cargo.toml`](buf-toolchain/Cargo.toml) (union of
+   `rust_triples` and any other host implied by those manifests; not the CI
+   matrix). cargo-deny also reads `deny.toml` or `.cargo/deny.toml` if you
+   rename the file.
 
 The `cargo_metadata_matches_rust_const` `#[test]` catches drift between (1) and
-(2), but not README or `.deny.toml` drift; keep (3) and (4) in sync by hand.
+(2), but not README or `.deny.toml` drift; keep (3) and (4) in sync by hand
+whenever those Cargo.toml files change.
+
 If you raise a target's
 `min_version`, also confirm whether
 [`PREHASHED_MINISIGN_MIN_VERSION`](buf-tools/build_support/verify.rs) still
