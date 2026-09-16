@@ -120,3 +120,4 @@ sha2 = "0.11"
 tar = "0.4"
 toml = { version = "1", default-features = false, features = ["parse", "serde"] }
 ureq = "3"
+rustls.workspace = true
