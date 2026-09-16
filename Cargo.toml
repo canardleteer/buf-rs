@@ -8,7 +8,7 @@ members = [
 ]
 
 [workspace.package]
-version = "1.72.0"
+version = "1.73.0"
 edition = "2024"
 license = "MIT"
 authors = ["canardleteer <eris.has.a.dad+github@gmail.com>"]
@@ -20,8 +20,8 @@ categories = ["development-tools", "api-bindings"]
 publish = true
 
 [workspace.dependencies]
-buf-tools = { path = "buf-tools", version = "=1.72.0" }
-buf-toolchain = { path = "buf-toolchain", version = "=1.72.0" }
+buf-tools = { path = "buf-tools", version = "=1.73.0" }
+buf-toolchain = { path = "buf-toolchain", version = "=1.73.0" }
 # ureq 3 pulls rustls transitively. Official fix for RUSTSEC-2026-0285 (0.23.44): >=0.23.45.
 # default-features = false + ring matches ureq's rustls feature (avoids aws-lc-sys).
 rustls = { version = ">=0.23.45", default-features = false, features = ["logging", "std", "tls12", "ring"] }
