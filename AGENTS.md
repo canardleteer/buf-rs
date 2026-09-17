@@ -264,9 +264,12 @@ tree after `cargo publish -p … --dry-run`.
   [`.github/workflows/buf-upstream-watch.yml`](.github/workflows/buf-upstream-watch.yml),
   scheduled / manual / `repository_dispatch` bump PRs when
   [bufbuild/buf](https://github.com/bufbuild/buf) `releases/latest` is newer
-  than `cargo xtask expected-buf-version`. Settings, `curl` example, dev
-  publish from the bump branch, and branch naming (`automated/buf/X.Y.Z`) are
-  documented in that file’s header comments (and in the generated PR body).
+  than `cargo xtask expected-buf-version`. Open bump PRs with a GitHub App
+  (preferred) or a collaborator fine-grained PAT so `pull_request` rust-tests
+  and rumdl attach as required checks; do not use `GITHUB_TOKEN` for push or
+  `gh pr create`. Settings, credentials, `curl` example, dev publish from
+  the bump branch, and branch naming (`automated/buf/X.Y.Z`) are documented
+  in that file’s header comments (and in the generated PR body).
 
 ## `rust-toolchain.toml` (Rust toolchain channel)
 
