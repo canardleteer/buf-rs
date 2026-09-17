@@ -1,53 +1,89 @@
-# Post-publish Docker integration
+# Docker integration (Debian + Alpine)
 
-Manual publish ([`.github/workflows/publish-crates.yml`](../../workflows/publish-crates.yml)) runs a **`post-publish-integration`** job after **`upload`** succeeds: it builds this image from a **minimal context** (no workspace root `Cargo.toml`, no `path` deps) and runs **`entrypoint.sh`** with **`TEST_CRATE_VERSION`** set to the published crates.io semver.
+Two sibling images run the **same** [`entrypoint.sh`](entrypoint.sh):
 
-## Isolation
+| File | `RUST_DOCKER_TAG` flavor | `library/rust` label when channel is `stable` |
+|------|--------------------------|-----------------------------------------------|
+| [`Dockerfile`](Dockerfile) | `debian` | `slim-bookworm` |
+| [`Dockerfile.alpine`](Dockerfile.alpine) | `alpine` | `alpine` |
 
-- Only **`cargo add buf-tools`** / **`cargo install buf-toolchain`** from the registry at **`TEST_CRATE_VERSION`**, plus sources copied from **`examples/`** (see staging below).
-- Integration **`Cargo.toml`** is maintained next to this **`Dockerfile`** — keep it aligned with **[`examples/Cargo.toml`](../../../examples/Cargo.toml)** (see **[`AGENTS.md`](../../../AGENTS.md)**).
+Do not hardcode `FROM rust:…`. Both files take `ARG RUST_DOCKER_TAG` and
+`FROM rust:${RUST_DOCKER_TAG}`. Alpine adds `gcompat` so official glibc
+`buf-Linux-*` binaries can exec on musl.
 
-## Staged build context (same for CI and [`run-integration-docker.sh`](../../ci-scripts/run-integration-docker.sh))
+Manual publish ([`.github/workflows/publish-crates.yml`](../../workflows/publish-crates.yml))
+runs **`post-publish-integration`** after **`upload`**: it builds **both**
+images from a **minimal context** (no workspace root `Cargo.toml`, no `path`
+deps except an empty `path-src/` so `COPY` succeeds) and runs
+**`entrypoint.sh`** with **`TEST_CRATE_VERSION`** set to the published
+crates.io semver.
+
+## Isolation (registry mode)
+
+- Only **`cargo add buf-tools`** / **`cargo install buf-toolchain`** from the
+  registry at **`TEST_CRATE_VERSION`**, plus sources copied from
+  **`examples/`** (see staging below).
+- Integration **`Cargo.toml`** is maintained next to these Dockerfiles —
+  keep it aligned with **[`examples/Cargo.toml`](../../../examples/Cargo.toml)**
+  (see **[`AGENTS.md`](../../../AGENTS.md)**).
+
+## Shared checks
+
+Both images, both install modes:
+
+1. Install `buf-tools` + `buf-toolchain` (registry version **or** path-preinstall).
+2. `validate-cargo-buf-toolchain --yaml`
+3. `buf --version` vs crate semver core
+4. `buf build` for the sample proto
+5. `cargo run` both examples
+
+## Staged build context
+
+Same layout for CI, [`run-integration-docker.sh`](../../ci-scripts/run-integration-docker.sh),
+and `cargo xtask image`:
 
 | Artifact | Source |
 |----------|--------|
 | `rust-toolchain.toml` | Repo root |
-| `Cargo.toml`, `Dockerfile`, `entrypoint.sh` | This directory |
+| `Cargo.toml`, `Dockerfile`, `Dockerfile.alpine`, `entrypoint.sh` | This directory |
 | `buf_lint.rs`, `protoc_with_buf_plugins.rs` | [`examples/`](../../../examples/) |
 | `proto/**` | [`examples/proto/`](../../../examples/proto/) |
+| `path-src/` | Empty in registry mode; workspace members in `cargo xtask image` |
 
 ## Docker base image (`RUST_DOCKER_TAG`)
 
-**`Dockerfile`** uses **`ARG RUST_DOCKER_TAG`** then **`FROM rust:${RUST_DOCKER_TAG}`** (no hardcoded Rust line). Before **`docker build`**, compute the tag from repo-root **`rust-toolchain.toml`**:
-
 ```bash
-RUST_DOCKER_TAG="$(bash .github/ci-scripts/rust-docker-tag-from-toolchain.sh rust-toolchain.toml)"
-docker build --build-arg "RUST_DOCKER_TAG=${RUST_DOCKER_TAG}" …
+# Debian
+RUST_DOCKER_TAG="$(bash .github/ci-scripts/rust-docker-tag-from-toolchain.sh rust-toolchain.toml debian)"
+# Alpine
+RUST_DOCKER_TAG="$(bash .github/ci-scripts/rust-docker-tag-from-toolchain.sh rust-toolchain.toml alpine)"
 ```
 
-**[`run-integration-docker.sh`](../../ci-scripts/run-integration-docker.sh)** and **`post-publish-integration`** in **[`publish-crates.yml`](../../workflows/publish-crates.yml)** do this for you. Inside the image, **`rust-toolchain.toml`** still selects the **`channel`** (`stable` plus components). When channel is `stable`, the script prints **`slim-bookworm`**. The workflow build sets **`pull: true`** so cache does not freeze an old `rust:slim-bookworm`.
+When `channel` is `X.Y.Z`, the script prints `X.Y-slim-bookworm` or
+`X.Y-alpine` (Docker Hub has no patch tags on `library/rust`). The publish
+workflow sets **`pull: true`**.
 
-## Caching
+## Local checks (no GitHub Actions)
 
-- **GitHub Actions:** [`docker/build-push-action`](https://github.com/docker/build-push-action) with **`cache-from` / `cache-to: type=gha`**. Cache inputs include **`rust-toolchain.toml`**, this tree, mirrored **`examples/`** sources, and the resolved **`RUST_DOCKER_TAG`** build-arg — **not** **`TEST_CRATE_VERSION`** (that is only passed at **`docker run`**).
-- **Dockerfile:** **`cargo fetch`** warms the Cargo cache for **`protoc-bin-vendored`** before **`buf-tools`** is added at runtime.
+Path-preinstall this worktree (unreleased `--yaml` helper):
+
+```bash
+cargo xtask image all
+# or: cargo xtask image debian
+# or: cargo xtask image alpine
+```
+
+Registry mode (`TEST_CRATE_VERSION` must already exist on crates.io):
+
+```bash
+TEST_CRATE_VERSION="$(bash .github/ci-scripts/read-workspace-version.sh)" \
+  bash .github/ci-scripts/run-integration-docker.sh
+# DISTRO=debian|alpine|all (default all)
+```
 
 ## Environment
 
 | Variable | Meaning |
 |----------|---------|
-| **`TEST_CRATE_VERSION`** | Full published semver for **`buf-tools`** / **`buf-toolchain`** (same string CI passes from **`verify`** **`publish_version`**). |
-
-## Local smoke
-
-From the repo root (requires Docker or Podman). **`TEST_CRATE_VERSION` must already exist on crates.io** (same semver CI passes after **`upload`**). The workspace version from **`read-workspace-version.sh`** only works once that release has been published.
-
-```bash
-TEST_CRATE_VERSION="$(bash .github/ci-scripts/read-workspace-version.sh)" bash .github/ci-scripts/run-integration-docker.sh
-```
-
-Or pass an explicit published version:
-
-```bash
-TEST_CRATE_VERSION=1.41.0 bash .github/ci-scripts/run-integration-docker.sh
-```
+| **`TEST_CRATE_VERSION`** | Full published semver for registry `cargo add` / `cargo install`. |
+| **`EXPECT_BUF_CORE`** | Buf `X.Y.Z` when path-preinstall is used (`cargo xtask image`). |

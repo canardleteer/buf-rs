@@ -1,0 +1,26 @@
+# Alpine sibling of Dockerfile. Same COPY / ENTRYPOINT / cargo fetch / INSTALL_MODE.
+# RUST_DOCKER_TAG must be the alpine library/rust label (stable → alpine).
+ARG RUST_DOCKER_TAG=alpine
+FROM rust:${RUST_DOCKER_TAG}
+
+RUN apk add --no-cache bash ca-certificates musl-dev gcompat
+
+WORKDIR /app
+
+COPY rust-toolchain.toml ./
+COPY Cargo.toml ./
+COPY buf_lint.rs protoc_with_buf_plugins.rs ./
+COPY proto ./proto/
+
+RUN cargo fetch
+
+COPY entrypoint.sh ./
+RUN chmod +x entrypoint.sh
+
+COPY path-src /opt/path-src
+ARG INSTALL_MODE=registry
+RUN if [ "${INSTALL_MODE}" = "path" ]; then \
+      cargo install --locked --root /usr/local --features validate-cli --path /opt/path-src/buf-toolchain; \
+    fi
+
+ENTRYPOINT ["/app/entrypoint.sh"]

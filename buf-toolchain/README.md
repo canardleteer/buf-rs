@@ -95,7 +95,7 @@ The same cache-slot lock as `buf-tools` serializes writers under
 ## Install
 
 ```bash
-cargo install buf-toolchain
+cargo install buf-toolchain --features validate-cli
 validate-cargo-buf-toolchain
 validate-cargo-buf-toolchain --yaml
 ```
@@ -110,7 +110,7 @@ stays the default.
 Custom directory:
 
 ```bash
-BUF_RS_TOOLCHAIN_BIN_DIR="$HOME/.local/bin" cargo install buf-toolchain
+BUF_RS_TOOLCHAIN_BIN_DIR="$HOME/.local/bin" cargo install buf-toolchain --features validate-cli
 BUF_RS_TOOLCHAIN_BIN_DIR="$HOME/.local/bin" validate-cargo-buf-toolchain
 ```
 

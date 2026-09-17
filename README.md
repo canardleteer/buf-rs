@@ -67,7 +67,7 @@ let _ = Command::new(buf).arg("--version").status();
 Primary workflow:
 
 ```bash
-cargo install buf-toolchain
+cargo install buf-toolchain --features validate-cli
 ```
 
 The `build.rs` shares `buf-tools`’ `build_support` (verify, lock, targets) and
@@ -280,6 +280,21 @@ After the quality loop, run the examples the same way CI does:
 bash .github/ci-scripts/run-examples.sh
 ```
 
+Integration images (Debian slim + Alpine) are not part of `check`. Build
+and run them locally with a Docker or Buildah engine (network required):
+
+```bash
+cargo xtask image all
+```
+
+`image debian` / `image alpine` build one base. That path-preinstalls
+`buf-toolchain` from this worktree and prints `validate-cargo-buf-toolchain --yaml`
+before the examples. Registry-mode smoke (published crate on crates.io):
+
+```bash
+TEST_CRATE_VERSION=1.73.0-dev.<run_id> bash .github/ci-scripts/run-integration-docker.sh
+```
+
 Equivalent Cargo-only test run:
 
 ```bash
@@ -306,7 +321,7 @@ deps): [`.github/ci-scripts/run-integration-docker.sh`](.github/ci-scripts/run-i
 stages [`rust-toolchain.toml`](rust-toolchain.toml), the integration manifest
 under [`.github/ci/integration/`](.github/ci/integration/), and mirrored
 [`examples/`](examples/) sources, then builds an image and runs the integration
-entrypoint (`cargo add buf-tools`, `cargo install buf-toolchain`, `buf --version`
+entrypoint (`cargo add buf-tools`, `cargo install buf-toolchain --features validate-cli`, `buf --version`
 vs crate semver core, `buf build` for the example baseline, both examples).
 
 `TEST_CRATE_VERSION` must be a published semver (whatever you shipped),

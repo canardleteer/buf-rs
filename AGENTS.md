@@ -15,9 +15,10 @@ For work under [`xtask/`](xtask/), also read and follow
   [`.github/ci-scripts/run-examples.sh`](.github/ci-scripts/run-examples.sh).
   Keep those callers aligned when the command changes. Do not make the
   xtask inspect a CI provider declaration.
-- Also adopted: `cargo xtask coverage` and `coverage-open`.
-- Intentionally omitted: `image`, `profile` / `profile-open`, and
-  `mcp-test`. See [`xtask/AGENTS.md`](xtask/AGENTS.md) for why.
+- Also adopted: `cargo xtask coverage` and `coverage-open`, and
+  `cargo xtask image` (`debian` / `alpine` / `all`).
+- Intentionally omitted: `profile` / `profile-open`, and `mcp-test`.
+  See [`xtask/AGENTS.md`](xtask/AGENTS.md) for why.
 - Repository-specific handles stay: `expected-buf-version`,
   `publish resolve|apply-version|verify-summary`, and
   `workspace set-buf-version`.
@@ -212,13 +213,16 @@ See [`.github/workflows/publish-crates.yml`](.github/workflows/publish-crates.ym
   YAML header comments (source-of-truth block), and, if the rule changes,
   `buf-tools/build.rs` and `buf-toolchain/build.rs` together.
 - Post-publish integration: After `upload` succeeds, job
-  `post-publish-integration` builds `.github/ci/integration/`’s Docker image
-  (staged context: repo `rust-toolchain.toml`, integration `Cargo.toml` /
-  `Dockerfile` / `entrypoint.sh`, mirrored `examples/` sources, no workspace
-  root) and runs `cargo add buf-tools`, `cargo install buf-toolchain`,
-  `buf --version` vs crate semver core, `buf build` baseline, then both
-  examples. Failure fails the workflow. `verify` exposes `publish_version` for
+  `post-publish-integration` builds **both** sibling images (Debian
+  `slim-bookworm` mapping and Alpine `alpine` mapping via
+  `RUST_DOCKER_TAG`) from the same staged context and runs the same
+  `entrypoint.sh` on each: `cargo add buf-tools`, `cargo install
+  buf-toolchain`, `validate-cargo-buf-toolchain --yaml`, `buf --version`
+  vs crate semver core, `buf build`, then both examples. Failure fails
+  the workflow. `verify` exposes `publish_version` for
   `TEST_CRATE_VERSION`. Skipped when `upload` is skipped (no token).
+  Local path-preinstall (no published crate): `cargo xtask image all`.
+  Local registry smoke: `run-integration-docker.sh`.
 - Artifacts: Each job uploads `Cargo.toml`, `buf-tools/Cargo.toml`, and
   `buf-toolchain/Cargo.toml` for debugging (requires `permissions.actions:
   write` on the workflow).
@@ -328,15 +332,14 @@ published crates stays `edition = "2024"` (Rust 1.85+) plus dependency
 Do not switch `channel` to an explicit `X.Y.Z` unless you intentionally freeze
 the compiler. If you do, document why.
 
-Integration Docker base: `Dockerfile` `ARG RUST_DOCKER_TAG` →
-`FROM rust:${RUST_DOCKER_TAG}`. CI and
-[`.github/ci-scripts/run-integration-docker.sh`](.github/ci-scripts/run-integration-docker.sh)
-pass `RUST_DOCKER_TAG` from
+Integration Docker base: both `Dockerfile` and `Dockerfile.alpine` use
+`ARG RUST_DOCKER_TAG` → `FROM rust:${RUST_DOCKER_TAG}`. Callers pass the
+distro label from
 [`.github/ci-scripts/rust-docker-tag-from-toolchain.sh`](.github/ci-scripts/rust-docker-tag-from-toolchain.sh)
-applied to `rust-toolchain.toml` (`channel = "stable"` → `slim-bookworm`;
-`channel = "X.Y.Z"` → `X.Y-slim-bookworm` because Docker Hub has no `X.Y.Z`
-patch tags on `library/rust`). The publish integration image build sets
-`pull: true` so GHA layer cache does not freeze an old `rust:slim-bookworm`.
+(`debian`: `stable` → `slim-bookworm`, `X.Y.Z` → `X.Y-slim-bookworm`;
+`alpine`: `stable` → `alpine`, `X.Y.Z` → `X.Y-alpine`). The publish
+integration image builds set `pull: true` so GHA layer cache does not
+freeze an old `library/rust` tag.
 
 ## Post-publish Docker integration (`.github/ci/integration/`)
 
