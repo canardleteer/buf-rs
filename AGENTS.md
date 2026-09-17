@@ -279,13 +279,13 @@ tree after `cargo publish -p … --dry-run`.
 - Tests: [`.github/workflows/rust-tests.yml`](.github/workflows/rust-tests.yml)
   on `push` and `pull_request` to `main`, matrix (linux amd64/arm64, macos
   arm64, windows amd64). Runs `cargo xtask check` (fmt, check, clippy,
-  test), both `buf-tools-examples` examples via
+  test) in the workflow, then both `buf-tools-examples` examples via
   [`.github/ci-scripts/run-examples.sh`](.github/ci-scripts/run-examples.sh),
   then `cargo publish -p buf-tools --dry-run --locked` and `buf-toolchain` (no
   token; packaging gate). A separate `audit` job runs `cargo deny check
-  licenses sources` ([`.deny.toml`](.deny.toml)) and `cargo audit`. Keep that
-  script aligned with `cargo xtask check`; the xtask does not inspect the
-  workflow.
+  licenses sources` ([`.deny.toml`](.deny.toml)) and `cargo audit`. Keep the
+  workflow's quality step aligned with `cargo xtask check`; the xtask does
+  not inspect the workflow.
 - Publish:
   [`.github/workflows/publish-crates.yml`](.github/workflows/publish-crates.yml),
   manual only (see **Publishing** above).
