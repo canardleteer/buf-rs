@@ -22,8 +22,8 @@ the PR, so staging may omit that directory.
 
 ## Isolation (registry mode)
 
-- Only `cargo add buf-tools` / `cargo install buf-toolchain --features
-  validate-cli` from the registry at `TEST_CRATE_VERSION`, plus sources
+- Only `cargo add buf-tools` / `cargo install buf-toolchain` from the
+  registry at `TEST_CRATE_VERSION`, plus sources
   copied from `examples/` (see staging below).
 - Integration `Cargo.toml` is maintained next to these Dockerfiles.
   Keep it aligned with

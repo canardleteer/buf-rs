@@ -30,8 +30,9 @@ path = "src/main.rs"
 required-features = ["validate-cli"]
 
 [features]
-# Empty default: `cargo add` / [build-dependencies] compile VERSION only.
-# Pass `--features validate-cli` to `cargo install` for the helper binary.
+# Default on so `cargo install buf-toolchain` installs the helper binary.
+# `cargo add` / [build-dependencies] can set default-features = false for VERSION only.
+default = ["validate-cli"]
 validate-cli = [
     "dep:clap",
     "dep:hex",

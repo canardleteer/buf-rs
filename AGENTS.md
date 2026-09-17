@@ -218,9 +218,9 @@ See [`.github/workflows/publish-crates.yml`](.github/workflows/publish-crates.ym
   `slim-bookworm` mapping and Alpine `alpine` mapping via
   `RUST_DOCKER_TAG`) from the same staged context and runs the same
   `entrypoint.sh` on each: `cargo add buf-tools`, `cargo install
-  buf-toolchain --features validate-cli`,
-  `validate-cargo-buf-toolchain --yaml`, `buf --version` vs crate semver
-  core, `buf build`, then both examples. Failure fails the workflow.
+  buf-toolchain`, `validate-cargo-buf-toolchain --yaml`, `buf --version`
+  vs crate semver core, `buf build`, then both examples. Failure fails
+  the workflow.
   `verify` exposes `publish_version` for `TEST_CRATE_VERSION`. Skipped
   when `upload` is skipped (no token). Registry Dockerfiles must build
   when `path-src/` is absent: `crates-io-publish` often dispatches the
@@ -385,9 +385,9 @@ Cover at least:
   `cache-link`, `cache-verified-link`, and `target`; with
   `BUF_RS_BUILD_LOG=verbose`; and after a prewarm with
   `CARGO_NET_OFFLINE=1`.
-- `buf-toolchain` install: without `--features validate-cli` (Cargo
-  skips the helper and still runs `build.rs`); with
-  `--features validate-cli`; `buf-toolchain@<semver>` syntax; isolated
+- `buf-toolchain` install: default features (helper binary); with
+  `--no-default-features` (Cargo skips the helper and still runs
+  `build.rs`); `buf-toolchain@<semver>` syntax; isolated
   `CARGO_HOME`; `CARGO_INSTALL_ROOT`; `BUF_RS_TOOLCHAIN_BIN_DIR`; and
   `[build-dependencies]`. `buf` / `protoc-gen-*` follow that
   destination order, not `cargo install --root`.
@@ -463,7 +463,9 @@ and `test` steps. Equivalent Cargo commands:
   unit tests reject those names in `Cargo.lock`. `cargo deny check
   licenses` also rejects MPL-2.0.
 - `buf-toolchain` `[[bin]]`: Cargo only `cargo install`s crates that expose a
-  binary (or installable example). The installed binary is
+  binary (or installable example). Default feature `validate-cli` selects
+  that binary so `cargo install buf-toolchain` does not warn that none are
+  available. The installed binary is
   `validate-cargo-buf-toolchain` (package name remains `buf-toolchain`); it
   re-verifies `sha256.txt` / minisign against GitHub for the installed Buf
   core, optionally compares `releases/latest`, and probes crates.io for

@@ -11,8 +11,8 @@ member. [`.cargo/config.toml`](../.cargo/config.toml) maps `cargo xtask` to
   fail-fast, runs all four by default, and supports mutually exclusive
   `--only` and `--exclude`. Feature-aware commands default to
   `--all-features` when you pass no feature option. `buf-toolchain`
-  defines `validate-cli` for the helper binary. `fmt` does not receive
-  feature flags.
+  enables `validate-cli` by default for the helper binary. `fmt` does
+  not receive feature flags.
   `check` and `clippy` use `--locked --workspace --all-targets`. `test` uses
   `--locked --workspace` without `--all-targets`, matching
   [`.github/workflows/rust-tests.yml`](../.github/workflows/rust-tests.yml).
