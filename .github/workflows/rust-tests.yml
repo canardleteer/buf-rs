@@ -105,6 +105,10 @@ jobs:
         if: matrix.platform.run_cargo_install_smoke
         run: cargo test -p buf-tools --locked --test cargo_install_layout -- --ignored --test-threads=1
 
+      - name: buf-toolchain default cargo-install (linux-amd64)
+        if: matrix.platform.run_cargo_install_smoke
+        run: cargo test -p buf-toolchain --locked --test cargo_install_default -- --ignored --test-threads=1
+
       # Packaging gate: does not upload or consume a crates.io version (no token).
       - name: cargo publish --dry-run (buf-tools, buf-toolchain)
         run: |

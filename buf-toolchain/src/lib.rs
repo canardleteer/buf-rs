@@ -43,7 +43,9 @@ mod tests {
             default
                 .iter()
                 .any(|feature| feature.as_str() == Some("validate-cli")),
-            "validate-cli must stay a default feature so cargo install selects the helper binary"
+            "validate-cli must stay a default feature so `cargo install buf-toolchain` \
+             (no feature flags) selects the helper and does not warn that none of the \
+             package's binaries are available"
         );
     }
 }
