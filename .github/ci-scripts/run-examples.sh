@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # -----------------------------------------------------------------------------
-# CI entrypoint: rustfmt check, clippy, workspace tests, then run buf-tools
-# examples (buf_lint + protoc_with_buf_plugins). Requires network for Buf
-# downloads during build.rs unless cache is warm.
+# CI entrypoint: cargo xtask check (fmt, check, clippy, test), then run
+# buf-tools examples (buf_lint + protoc_with_buf_plugins). Requires network
+# for Buf downloads during build.rs unless cache is warm.
 #
 # Environment:
 #   GITHUB_WORKSPACE — if set (Actions), cd there before running (default: cwd).
@@ -26,14 +26,8 @@ BUF_EXPECT_VERSION="$(cargo xtask expected-buf-version)"
 export BUF_EXPECT_VERSION
 echo "Expected Buf Version: ${BUF_EXPECT_VERSION}"
 
-echo "==> cargo fmt --all -- --check"
-cargo fmt --all -- --check
-
-echo "==> cargo clippy --workspace --locked --all-targets"
-cargo clippy --workspace --locked --all-targets
-
-echo "==> cargo test --workspace --locked"
-cargo test --workspace --locked
+echo "==> cargo xtask check"
+cargo xtask check
 
 echo "==> cargo build -p buf-tools --locked (ensure buf present for examples)"
 cargo build -p buf-tools --locked
