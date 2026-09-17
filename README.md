@@ -320,9 +320,10 @@ the manual publish workflow uses (minimal Docker context, no workspace `path`
 deps): [`.github/ci-scripts/run-integration-docker.sh`](.github/ci-scripts/run-integration-docker.sh)
 stages [`rust-toolchain.toml`](rust-toolchain.toml), the integration manifest
 under [`.github/ci/integration/`](.github/ci/integration/), and mirrored
-[`examples/`](examples/) sources, then builds an image and runs the integration
-entrypoint (`cargo add buf-tools`, `cargo install buf-toolchain --features validate-cli`, `buf --version`
-vs crate semver core, `buf build` for the example baseline, both examples).
+[`examples/`](examples/) sources, then builds an image and runs the
+integration entrypoint (`cargo add buf-tools`, `cargo install
+buf-toolchain --features validate-cli`, `buf --version` vs crate semver
+core, `buf build` for the example baseline, both examples).
 
 `TEST_CRATE_VERSION` must be a published semver (whatever you shipped),
 not only the value in `Cargo.toml`:
