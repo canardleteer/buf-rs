@@ -30,28 +30,48 @@ path = "src/main.rs"
 required-features = ["validate-cli"]
 
 [features]
-# Empty default: `cargo add buf-toolchain` / [build-dependencies] do not pull
-# clap or noyalib. Pass `--features validate-cli` to `cargo install`.
-validate-cli = ["dep:clap", "dep:noyalib", "dep:serde"]
+# Empty default: `cargo add` / [build-dependencies] compile VERSION only.
+# Pass `--features validate-cli` to `cargo install` for the helper binary.
+validate-cli = [
+    "dep:clap",
+    "dep:hex",
+    "dep:minisign-verify",
+    "dep:noyalib",
+    "dep:regex",
+    "dep:rustls",
+    "dep:semver",
+    "dep:serde",
+    "dep:serde_json",
+    "dep:sha2",
+    "dep:ureq",
+]
 
 [dependencies]
-hex = "0.4"
-minisign-verify = "0.2.5"
-regex = "1"
-semver = "1"
-serde_json = "1"
-sha2 = "0.11"
-ureq = "3"
-rustls.workspace = true
 clap = { version = "4.6", features = ["derive"], optional = true }
+hex = { version = "0.4", optional = true }
+minisign-verify = { version = "0.2.5", optional = true }
 noyalib = { version = "0.0.44", optional = true }
+regex = { version = "1", optional = true }
+# Pin ureq's rustls (RUSTSEC-2026-0285). Not imported; see cargo-machete ignore.
+rustls = { workspace = true, optional = true }
+semver = { version = "1", optional = true }
 serde = { version = "1", features = ["derive"], optional = true }
+serde_json = { version = "1", optional = true }
+sha2 = { version = "0.11", optional = true }
+ureq = { version = "3", optional = true }
 
 [dev-dependencies]
+# `cfg(test)` compiles build_support targets/verify the same way buf-tools does.
 hex = "0.4"
+minisign-verify = "0.2.5"
 semver = "1"
 sha2 = "0.11"
 toml = { version = "1", default-features = false, features = ["parse", "serde"] }
+
+[package.metadata.cargo-machete]
+# minisign-verify: used from build_support/verify.rs via #[path].
+# rustls: version pin for ureq, not imported in Rust source.
+ignored = ["minisign-verify", "rustls"]
 
 [build-dependencies]
 flate2 = "1"

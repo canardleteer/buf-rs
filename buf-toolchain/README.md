@@ -64,8 +64,8 @@ Cache and downloads:
 - `BUF_RS_RELEASE_BASE_URL`: optional prefix for release assets (default
   `https://github.com/bufbuild/buf/releases/download/v{X.Y.Z}/`).
 
-Validation helper (`validate-cargo-buf-toolchain` binary; `validate-cli` feature,
-enabled automatically by `cargo install`):
+Validation helper (`validate-cargo-buf-toolchain` binary; pass
+`--features validate-cli` to `cargo install`):
 
 - `BUF_RS_VALIDATE_OFFLINE=1`: skip GitHub and crates.io network calls.
 - `--yaml`: machine-readable report on stdout (install env, bin dir rule,
