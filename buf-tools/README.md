@@ -14,18 +14,18 @@ The repository overview is in the
 [repo-readme]: https://github.com/canardleteer/buf-rs#readme
 [repo-publish-channels]: https://github.com/canardleteer/buf-rs#cratesio-publish-channels-manual-workflow
 
-> [!IMPORTANT]
-> Our crate version matches the `buf` version. After a stable crate is released,
-> if there are fixes needed on the Rust build / dependency management side of
-> things, we release those to a `hotfix` pre-release version of the same `buf`
-> version. It's worth checking for `hotfix` versions, if you encounter build
-> problems.
->
-> **Example:** `1.70.0-hotfix.1` fixes buf-tools under `cargo install` when it is
-> a build dependency.
->
-> See [crates.io publish channels][repo-publish-channels] in the repository
-> README.
+## Crate version tracks Buf
+
+The published crate semver core is the upstream Buf release. After a
+stable `X.Y.Z` is on crates.io, buf-rs-only follow-ups ship as
+`{core}-hotfix.N`. Check for a hotfix if a build fails against a Buf
+version you already pinned.
+
+`1.70.0-hotfix.1` repairs `buf-tools` under `cargo install` when it is
+a build dependency. The same Buf core is published for `buf-toolchain`.
+
+See [crates.io publish channels][repo-publish-channels] in the
+repository README.
 
 ## What this crate does
 
@@ -38,18 +38,21 @@ Cargo’s `OUT_DIR`. The Buf release is pinned by this crate’s semver core (se
 
 ## Layout mode (`BUF_RS_LAYOUT_MODE`)
 
-Compile-time selector for where binaries are exposed:
+`BUF_RS_LAYOUT_MODE` selects where binaries are exposed.
 
-- `cache` (default): binaries under `OUT_DIR`, persistent cache for downloads.
-- `cache-link`: cache plus symlinks (or copies) under
+- `cache` (default) puts binaries under `OUT_DIR` and keeps a persistent
+  download cache.
+- `cache-link` adds symlinks (or copies) under
   `target/buf-tools/<semver-core>/<TARGET>/bin`.
-- `cache-verified-link`: like `cache-link`, re-verifies cache contents before
-  link/copy.
-- `target`: artifacts under `target/buf-tools/<semver-core>/<TARGET>/...`
-  without the shared cache layout.
+- `cache-verified-link` matches `cache-link` and re-verifies cache
+  contents before the link or copy.
+- `target` writes artifacts under
+  `target/buf-tools/<semver-core>/<TARGET>/...` without the shared cache
+  layout.
 
-Build output policy: default `build_log=warn` keeps happy paths quiet; set
-`BUF_RS_BUILD_LOG=verbose` or `silent` as needed.
+Default `build_log=warn` keeps happy paths quiet. Set
+`BUF_RS_BUILD_LOG=verbose` or `silent` when you need more or less
+output.
 
 ```bash
 BUF_RS_LAYOUT_MODE=cache-link cargo build -p buf-tools
@@ -62,13 +65,13 @@ users install it with `cargo install`, Cargo builds dependencies under a temp
 tree (for example `/tmp/cargo-install…/release/build/…/out`) rather than your
 project `target/` directory.
 
-**Default `cache` mode** works in that layout: binaries are exposed via
+**Default `cache` mode** works in that layout. Binaries are exposed via
 compile-time `env!` paths under the dependency `OUT_DIR/bin`, and downloads use
 the shared cache (`BUF_RS_CACHE_DIR` or the platform cache dir). No project
 `target/` ancestor is required.
 
 **Non-cache modes** (`cache-link`, `cache-verified-link`, `target`) need a
-layout root. Resolution order:
+layout root. Resolution walks this order.
 
 1. `CARGO_TARGET_DIR` when set → `$CARGO_TARGET_DIR/buf-tools/<core>/<TARGET>/`
 2. nearest `OUT_DIR` ancestor named `target` → `target/buf-tools/<core>/<TARGET>/`
@@ -82,25 +85,26 @@ your repo `target/`. They are not a substitute for project-local
 `BUF_RS_LAYOUT_MODE=cache` unless you explicitly need linked bins in the install
 tree.
 
-**Custom Cargo profiles** (`[profile.foo]` in `Cargo.toml`): step 3 uses
+**Custom Cargo profiles** (`[profile.foo]` in `Cargo.toml`) use step 3 with
 whatever directory parents `build/` (for example `foo/buf-tools/<core>/<TARGET>/`),
 including under `cargo install` temps.
 
 ### Recovery without republishing your crate
 
-Environment variables are read at **build time** of `buf-tools` and override
+Environment variables are read when `buf-tools` compiles and override
 `Cargo.toml` metadata. Set them when building or installing the consumer crate.
 
 | Symptom | What to try |
 |--------|-------------|
-| `could not locate Cargo target dir from OUT_DIR` on an **old** `buf-tools` (before layout fix) | Upgrade `buf-tools` to a release containing the fix. No env var bypasses the unconditional target walk in those versions. Alternatives: use [`buf-toolchain`](../buf-toolchain/README.md) as a build dependency instead, or `cargo install buf-toolchain` if you only need the CLI. |
+| `could not locate Cargo target dir from OUT_DIR` on a `buf-tools` release from before the layout fix | Upgrade `buf-tools` to a release containing the fix. No env var bypasses the unconditional target walk in those versions. Alternatives: use [`buf-toolchain`](../buf-toolchain/README.md) as a build dependency instead, or `cargo install buf-toolchain --features validate-cli` if you only need the CLI. |
 | `cargo install` fails with non-default `layout_mode` in workspace metadata | `BUF_RS_LAYOUT_MODE=cache cargo install …` |
 | Need a stable writable layout root for non-cache modes | `CARGO_TARGET_DIR=/path/to/writable/dir cargo install …` |
-| Network flake or air-gapped retry | Prewarm: `BUF_RS_CACHE_DIR=… cargo build` (any crate using `buf-tools`), then `BUF_RS_CACHE_DIR=… CARGO_NET_OFFLINE=1 cargo install …` |
+| Network flake or air-gapped retry | Prewarm with `BUF_RS_CACHE_DIR=… cargo build` (any crate using `buf-tools`), then `BUF_RS_CACHE_DIR=… CARGO_NET_OFFLINE=1 cargo install …` |
 | Diagnose resolution or downloads | `BUF_RS_BUILD_LOG=verbose cargo install …` |
 | Override download mirrors | `BUF_RS_RELEASE_BASE_URL`, `BUF_RS_SOURCE_BASE_URL` (see below) |
 
-Repo-local defaults without shell exports:
+Repo-local defaults can live in `.cargo/config.toml` instead of the
+shell.
 
 ```toml
 # .cargo/config.toml
@@ -109,7 +113,8 @@ BUF_RS_LAYOUT_MODE = "cache"
 # BUF_RS_CACHE_DIR = "target/buf-rs-cache"
 ```
 
-Contract tests (network, opt-in locally; CI runs on linux-amd64):
+Contract tests need network on a cold cache. CI runs them on linux-amd64.
+Locally they are opt-in.
 
 ```bash
 cargo test -p buf-tools --locked --test cargo_install_layout -- --ignored
@@ -117,16 +122,16 @@ cargo test -p buf-tools --locked --test cargo_install_layout -- --ignored
 
 ## Build-script logging (`BUF_RS_BUILD_LOG`)
 
-- `warn` (default; `true` aliases this): warnings and failures only.
-- `verbose`: full progress and diagnostics.
-- `silent` (`false` aliases this): suppress warnings from the build script.
+- `warn` (default; `true` aliases this) prints warnings and failures only.
+- `verbose` prints full progress and diagnostics.
+- `silent` (`false` aliases this) suppresses warnings from the build script.
 
 Build scripts only surface output via `cargo:warning=` lines.
 
 ## Source-controlled configuration
 
 Defaults can live in `Cargo.toml` metadata (overridden by env vars, highest
-precedence):
+precedence).
 
 ```toml
 [workspace.metadata.buf-tools.config]
@@ -140,9 +145,10 @@ source_base_url = "https://github.com/bufbuild/buf/archive/refs/tags/"
 
 Per-package overrides use `[package.metadata.buf-tools.config]`.
 
-Supported keys: `layout_mode`, `build_log`, `cache_dir`, `release_base_url`,
-`source_base_url`. Resolution order: built-in defaults → workspace metadata →
-package metadata → environment (and optional `.cargo/config.toml` `[env]`).
+Supported keys are `layout_mode`, `build_log`, `cache_dir`,
+`release_base_url`, and `source_base_url`. Resolution walks built-in
+defaults, then workspace metadata, then package metadata, then the
+environment (and optional `.cargo/config.toml` `[env]`).
 
 ## Network
 
@@ -161,7 +167,7 @@ compile, but the files are not the Buf CLI. Do not execute them from a
 consumer `build.rs` during documentation builds. Package a generated
 descriptor (or skip live `buf`) when `compiled_for_docs_rs()` is true.
 
-Local check (no network; `cargo test --workspace` already runs this):
+The workspace test suite already runs this check with no network.
 
 ```bash
 DOCS_RS=1 CARGO_NET_OFFLINE=true \
@@ -182,14 +188,16 @@ for that cache root.
 
 When `BUF_RS_INCLUDE_SOURCE=1`, `build.rs` can fetch the tagged source archive
 from GitHub. Source tarballs are not covered by the same `sha256.txt` manifest
-as binaries; use for inspection, not as the primary integrity story.
+as binaries. Treat that tree as inspection-only. Do not treat it as the
+primary integrity check.
 
 ## URL overrides
 
-- `BUF_RS_RELEASE_BASE_URL`: prefix for `sha256.txt`, signatures, and binaries
-  (default `https://github.com/bufbuild/buf/releases/download/v{X.Y.Z}/`).
-- `BUF_RS_SOURCE_BASE_URL`: prefix for optional source fetches (default
-  `https://github.com/bufbuild/buf/archive/refs/tags/`).
+`BUF_RS_RELEASE_BASE_URL` prefixes `sha256.txt`, signatures, and
+binaries. The default is
+`https://github.com/bufbuild/buf/releases/download/v{X.Y.Z}/`.
+`BUF_RS_SOURCE_BASE_URL` prefixes optional source fetches. The default
+is `https://github.com/bufbuild/buf/archive/refs/tags/`.
 
 Trailing slash optional.
 

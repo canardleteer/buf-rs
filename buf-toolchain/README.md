@@ -17,23 +17,23 @@ in the published crate.
 [repo-readme]: https://github.com/canardleteer/buf-rs#readme
 [repo-publish-channels]: https://github.com/canardleteer/buf-rs#cratesio-publish-channels-manual-workflow
 
-> [!IMPORTANT]
-> Our crate version matches the `buf` version. After a stable crate is released,
-> if there are fixes needed on the Rust build / dependency management side of
-> things, we release those to a `hotfix` pre-release version of the same `buf`
-> version. It's worth checking for `hotfix` versions, if you encounter build
-> problems.
->
-> **Example:** `1.70.0-hotfix.1` publishes `buf-tools` and `buf-toolchain` hotfix
-> builds at the same Buf core.
->
-> See [crates.io publish channels][repo-publish-channels] in the repository
-> README.
+## Crate version tracks Buf
+
+The published crate semver core is the upstream Buf release. After a
+stable `X.Y.Z` is on crates.io, buf-rs-only follow-ups ship as
+`{core}-hotfix.N`. Check for a hotfix if a build fails against a Buf
+version you already pinned.
+
+`1.70.0-hotfix.1` repairs `buf-tools` under `cargo install` when it is
+a build dependency. The same Buf core is published for `buf-toolchain`.
+
+See [crates.io publish channels][repo-publish-channels] in the
+repository README.
 
 ## What this crate does
 
-On build (including `cargo install buf-toolchain` or as a build dependency),
-`build.rs`:
+On build (including `cargo install buf-toolchain --features validate-cli`
+or as a build dependency), `build.rs` does the following.
 
 1. Resolves the compilation target to a Buf release asset suffix.
 2. Downloads release files (or reuses a verified cache entry under lock).
@@ -41,13 +41,13 @@ On build (including `cargo install buf-toolchain` or as a build dependency),
 4. Installs `buf`, `protoc-gen-buf-breaking`, and `protoc-gen-buf-lint` (with
    `.exe` on Windows) into one directory using atomic writes.
 
-Default install directory: `$CARGO_HOME/bin` (often `~/.cargo/bin`).
+The default install directory is `$CARGO_HOME/bin` (often `~/.cargo/bin`).
 Override with `BUF_RS_TOOLCHAIN_BIN_DIR`, or set `CARGO_INSTALL_ROOT`
 (Cargo's `install.root`; binaries go in `<root>/bin`). `cargo install
 --root` is not visible to `build.rs`.
 
-`cargo install` also places the `validate-cargo-buf-toolchain` binary on `PATH`
-for post-install checks.
+With `--features validate-cli`, `cargo install` also places
+`validate-cargo-buf-toolchain` on `PATH` for post-install checks.
 
 Per-target minimum Buf versions match `buf-tools`; unsupported combinations fail
 before any large download. See `build_support/targets.rs` in the repo for the
@@ -55,25 +55,19 @@ authoritative table.
 
 ## Environment variables
 
-Install location:
+Install location uses this order. Non-empty `BUF_RS_TOOLCHAIN_BIN_DIR`
+wins. Else `$CARGO_INSTALL_ROOT/bin` if that env is set. Else
+`$CARGO_HOME/bin`. `cargo install --root` is not visible to `build.rs`.
 
-- `BUF_RS_TOOLCHAIN_BIN_DIR`: if non-empty, install only here.
-- `CARGO_INSTALL_ROOT`: if `BUF_RS_TOOLCHAIN_BIN_DIR` is unset, install
-  under `<CARGO_INSTALL_ROOT>/bin`.
-- Otherwise `$CARGO_HOME/bin`.
+`BUF_RS_CACHE_DIR` is an optional cache root
+(`<semver-core>/<target>/` under it). `BUF_RS_RELEASE_BASE_URL` prefixes
+release assets. The default is
+`https://github.com/bufbuild/buf/releases/download/v{X.Y.Z}/`.
 
-Cache and downloads:
-
-- `BUF_RS_CACHE_DIR`: optional cache root (`<semver-core>/<target>/` under it).
-- `BUF_RS_RELEASE_BASE_URL`: optional prefix for release assets (default
-  `https://github.com/bufbuild/buf/releases/download/v{X.Y.Z}/`).
-
-Validation helper (`validate-cargo-buf-toolchain` binary; pass
-`--features validate-cli` to `cargo install`):
-
-- `BUF_RS_VALIDATE_OFFLINE=1`: skip GitHub and crates.io network calls.
-- `--yaml`: machine-readable report on stdout (install env, bin dir rule,
-  per-binary status, GitHub / crates.io).
+`validate-cargo-buf-toolchain` needs `--features validate-cli` on
+`cargo install`. Set `BUF_RS_VALIDATE_OFFLINE=1` to skip GitHub and
+crates.io. Pass `--yaml` for a machine-readable report (install env, bin
+dir rule, per-binary status, GitHub / crates.io).
 
 Options that apply only when depending on `buf-tools` directly (layout, build
 log, source bundles) are documented in the [buf-tools docs][docs-buf-tools].
@@ -84,7 +78,7 @@ docs.rs sets `DOCS_RS=1` and blocks network. `build.rs` returns before any
 download or install into `$CARGO_HOME/bin`. The library does not expose
 install paths via `env!`; rustdoc only needs the build script to succeed.
 
-Local check (no network; `cargo test --workspace` already runs this):
+The workspace test suite already runs this check with no network.
 
 ```bash
 DOCS_RS=1 CARGO_NET_OFFLINE=true \
@@ -111,7 +105,8 @@ document (crate pin, resolved bin dir and which env rule won, install env
 snapshot, per-binary status, and network / crates.io results). Human text
 stays the default.
 
-Custom directory:
+Put the helper and the Buf binaries in one directory with
+`BUF_RS_TOOLCHAIN_BIN_DIR` or `CARGO_INSTALL_ROOT`.
 
 ```bash
 BUF_RS_TOOLCHAIN_BIN_DIR="$HOME/.local/bin" cargo install buf-toolchain --features validate-cli

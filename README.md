@@ -8,11 +8,8 @@
 [crates-buf-tools]: https://crates.io/crates/buf-tools
 [crates-buf-toolchain]: https://crates.io/crates/buf-toolchain
 
-> [!WARNING]
-> Clanker generated code, running an auto-release pipeline on auto-pilot from an
-> external release trigger.
->
-> Decide if that degree of automation is appropriate for your requirements.
+This repository can publish from an automated Buf-release trigger.
+Decide whether that pipeline fits your requirements.
 
 Rust workspace distributing the official [Buf][buf-github] CLI plus
 `protoc-gen-buf-breaking` and `protoc-gen-buf-lint` via two crates:
@@ -29,17 +26,17 @@ Repository: [github.com/canardleteer/buf-rs][repo-github]
 [buf-github]: https://github.com/bufbuild/buf
 [repo-github]: https://github.com/canardleteer/buf-rs
 
-> [!IMPORTANT]
-> Our crate version matches the `buf` version. After a stable crate is released,
-> if there are fixes needed on the Rust build / dependency management side of
-> things, we release those to a `hotfix` pre-release version of the same `buf`
-> version. It's worth checking for `hotfix` versions, if you encounter build
-> problems.
->
-> **Example:** `1.70.0-hotfix.1` fixes buf-tools under `cargo install` when it is
-> a build dependency.
->
-> See [crates.io publish channels](#cratesio-publish-channels-manual-workflow).
+## Crate version tracks Buf
+
+The published crate semver core is the upstream Buf release. After a
+stable `X.Y.Z` is on crates.io, buf-rs-only follow-ups ship as
+`{core}-hotfix.N`. Check for a hotfix if a build fails against a Buf
+version you already pinned.
+
+`1.70.0-hotfix.1` repairs `buf-tools` under `cargo install` when it is
+a build dependency. The same Buf core is published for `buf-toolchain`.
+
+See [crates.io publish channels](#cratesio-publish-channels-manual-workflow).
 
 ## Usage
 
@@ -148,8 +145,8 @@ That prints `X.Y.Z` from `[workspace.package].version` (same rule as tests via
 
 Maintainers use this to set which upstream Buf release the workspace tracks
 (plain `X.Y.Z` in the root `Cargo.toml`: `[workspace.package].version` plus
-`=X.Y.Z` pins on `buf-tools` and `buf-toolchain`). That can be an older or newer
-Buf release, not only “moving forward.”
+`=X.Y.Z` pins on `buf-tools` and `buf-toolchain`). You can pin an older
+or a newer Buf release.
 
 It is not the same as `cargo xtask publish apply-version`, which the publish
 workflow uses on CI to apply `-dev.*` / `-rc.*` / `-hotfix.*` crate pre-release
@@ -320,11 +317,11 @@ cargo test --workspace --locked
 
 After a version is on crates.io, you can run the same registry-only smoke
 the manual publish workflow uses (minimal Docker context, no workspace `path`
-deps): [`.github/ci-scripts/run-integration-docker.sh`](.github/ci-scripts/run-integration-docker.sh)
-stages [`rust-toolchain.toml`](rust-toolchain.toml), the integration manifest
-under [`.github/ci/integration/`](.github/ci/integration/), and mirrored
-[`examples/`](examples/) sources, then builds an image and runs the
-integration entrypoint (`cargo add buf-tools`, `cargo install
+deps). [`.github/ci-scripts/run-integration-docker.sh`](.github/ci-scripts/run-integration-docker.sh)
+stages [`rust-toolchain.toml`](rust-toolchain.toml), the integration
+manifest under [`.github/ci/integration/`](.github/ci/integration/), and
+mirrored [`examples/`](examples/) sources. It builds the Debian and Alpine
+images and runs the entrypoint (`cargo add buf-tools`, `cargo install
 buf-toolchain --features validate-cli`, `buf --version` vs crate semver
 core, `buf build` for the example baseline, both examples).
 
@@ -342,8 +339,8 @@ Or pass the same string as the first argument. Requires Docker (default) or set
 ## GitHub workflows
 
 Workflow YAML files live under [`.github/workflows/`](.github/workflows/).
-Repository settings, tokens, and operator notes for each workflow are
-documented in comment headers at the top of those files (not duplicated here).
+Each file's header comments cover repository settings and tokens. Those
+notes are not duplicated here.
 
 | Workflow | Role |
 |----------|------|

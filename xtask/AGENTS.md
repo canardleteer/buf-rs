@@ -10,9 +10,9 @@ member. [`.cargo/config.toml`](../.cargo/config.toml) maps `cargo xtask` to
 - `check` registers `fmt`, `check`, `clippy`, and `test` in that order. It is
   fail-fast, runs all four by default, and supports mutually exclusive
   `--only` and `--exclude`. Feature-aware commands default to
-  `--all-features` when you pass no feature option. Workspace packages
-  currently define no features, so that default matches
-  `cargo test --workspace --locked`. `fmt` does not receive feature flags.
+  `--all-features` when you pass no feature option. `buf-toolchain`
+  defines `validate-cli` for the helper binary. `fmt` does not receive
+  feature flags.
   `check` and `clippy` use `--locked --workspace --all-targets`. `test` uses
   `--locked --workspace` without `--all-targets`, matching
   [`.github/workflows/rust-tests.yml`](../.github/workflows/rust-tests.yml).
