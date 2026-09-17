@@ -7,7 +7,7 @@
 # including `-dev`/`-rc`/`-hotfix` when present) and **Buf core** (`cargo xtask expected-buf-version`),
 # then the **Crates Resolved Version** subsection and **resolved buf** lines from:
 #   `cargo xtask publish verify-summary --crates-version "$(read-workspace-version.sh)"`
-#   (see `xtask/src/main.rs`, fn `emit_verify_summary`).
+#   (see `xtask/src/publish.rs`, fn `emit_verify_summary`).
 #
 # The Buf release tag **vX.Y.Z** is derived only from `major.minor.patch` of the crate
 # semver (ignoring pre-release / build). That rule MUST match:
@@ -461,11 +461,11 @@ jobs:
           echo "tag=${TAG}" >> "${GITHUB_OUTPUT}"
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4.3.0
+        uses: docker/setup-buildx-action@v4.4.1
 
       # Image only: OS + Rust base, rust-toolchain.toml, cargo fetch (protoc-bin-vendored). No crates.io buf-tools yet.
       - name: Build integration Docker image
-        uses: docker/build-push-action@v7.3.0
+        uses: docker/build-push-action@v7.4.0
         with:
           context: ${{ steps.stage.outputs.context }}
           push: false

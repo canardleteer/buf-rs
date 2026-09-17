@@ -3,6 +3,35 @@
 Concise rules for coding agents. User-facing commands stay in
 [`README.md`](README.md).
 
+For work under [`xtask/`](xtask/), also read and follow
+[`xtask/AGENTS.md`](xtask/AGENTS.md).
+
+## Development tasks (`cargo xtask`)
+
+- Canonical local quality command: `cargo xtask check`. `cargo xtask ci`
+  is the same command. Registered steps are `fmt`, `check`, `clippy`, and
+  `test`. [`.github/workflows/rust-tests.yml`](.github/workflows/rust-tests.yml)
+  runs `cargo xtask check`, then examples via
+  [`.github/ci-scripts/run-examples.sh`](.github/ci-scripts/run-examples.sh).
+  Keep those callers aligned when the command changes. Do not make the
+  xtask inspect a CI provider declaration.
+- Also adopted: `cargo xtask coverage` and `coverage-open`.
+- Intentionally omitted: `image`, `profile` / `profile-open`, and
+  `mcp-test`. See [`xtask/AGENTS.md`](xtask/AGENTS.md) for why.
+- Repository-specific handles stay: `expected-buf-version`,
+  `publish resolve|apply-version|verify-summary`, and
+  `workspace set-buf-version`.
+- Prefer `cargo xtask` over new Python scripts for typed, cross-platform,
+  Cargo-aware development orchestration. Inspect overlapping Python
+  scripts and propose a migration, but obtain user approval before
+  replacing a mature script or changing callers. Retain Python where its
+  ecosystem or data-processing strengths materially fit better. The
+  upstream-watch semver compare in
+  [`.github/ci-scripts/bufsemver_upstream_is_newer.py`](.github/ci-scripts/bufsemver_upstream_is_newer.py)
+  is one such retained helper.
+- When an xtask command needs async I/O or concurrency, `tokio` and
+  `tracing` are appropriate. Leave synchronous commands synchronous.
+
 ## Two different “versions”
 
 Authoritative Buf pin: `[workspace.package].version` and the `version = "=…"`
@@ -17,9 +46,10 @@ Set the Buf pin locally (outside CI): after confirming
 
 1. `cargo xtask workspace set-buf-version X.Y.Z`
 2. `cargo generate-lockfile`
-3. `BUF_EXPECT_VERSION="$(cargo xtask expected-buf-version)"`
-4. `echo "Expected Buf Version: ${BUF_EXPECT_VERSION}"`
-5. `cargo test --workspace --locked`
+3. `cargo xtask check`
+
+`cargo xtask check` injects `BUF_EXPECT_VERSION` from
+`cargo xtask expected-buf-version` when you have not already set it.
 
 Read the current core with `cargo xtask expected-buf-version` (from
 `[workspace.package].version` in the root `Cargo.toml`, same `X.Y.Z` as tests
@@ -217,9 +247,8 @@ This is for maintainers changing which upstream Buf release the workspace pins
 which only rewrites the manifest on CI runners for `dev` / `rc` / `hotfix`
 channels using `-dev.*` / `-rc.*` / `-hotfix.*` crate suffixes.
 
-After running it: `cargo generate-lockfile`, then set `BUF_EXPECT_VERSION` from
-`cargo xtask expected-buf-version` and run `cargo test --workspace --locked`
-(see the numbered list under **Two different “versions”**).
+After running it: `cargo generate-lockfile`, then `cargo xtask check` (see
+the numbered list under **Two different “versions”**).
 
 ### GitHub settings (before upload works)
 
@@ -251,12 +280,14 @@ tree after `cargo publish -p … --dry-run`.
 
 - Tests: [`.github/workflows/rust-tests.yml`](.github/workflows/rust-tests.yml)
   on `push` and `pull_request` to `main`, matrix (linux amd64/arm64, macos
-  arm64, windows amd64). Runs `cargo fmt --check`, `cargo clippy`, `cargo
-  test`, both `buf-tools-examples` examples via
+  arm64, windows amd64). Runs `cargo xtask check` (fmt, check, clippy,
+  test) in the workflow, then both `buf-tools-examples` examples via
   [`.github/ci-scripts/run-examples.sh`](.github/ci-scripts/run-examples.sh),
   then `cargo publish -p buf-tools --dry-run --locked` and `buf-toolchain` (no
   token; packaging gate). A separate `audit` job runs `cargo deny check
-  licenses sources` ([`.deny.toml`](.deny.toml)) and `cargo audit`.
+  licenses sources` ([`.deny.toml`](.deny.toml)) and `cargo audit`. Keep the
+  workflow's quality step aligned with `cargo xtask check`; the xtask does
+  not inspect the workflow.
 - Publish:
   [`.github/workflows/publish-crates.yml`](.github/workflows/publish-crates.yml),
   manual only (see **Publishing** above).
@@ -319,12 +350,18 @@ to the `Dockerfile`, and adjust
 
 ## Linting
 
-Before merging risky changes:
+Before merging risky changes, prefer `cargo xtask check` (or a narrower
+`--only` selection). That runs the registered `fmt`, `check`, `clippy`,
+and `test` steps. Equivalent Cargo commands:
 
 - `cargo fmt --all -- --check` (formatting gate; use `cargo fmt --all` to
   apply).
 - `cargo clippy --workspace --locked --all-targets` (static analysis gate;
   narrow with `-p` when iterating on one crate).
+- `cargo check --workspace --locked --all-targets`.
+- `cargo test --workspace --locked` (set `BUF_EXPECT_VERSION` from
+  `cargo xtask expected-buf-version`, or let `cargo xtask check` inject
+  it when unset).
 - `buf-toolchain` + `buf-tools/build_support`: `buf-toolchain/build_support`
   is a symlink to [`buf-tools/build_support`](buf-tools/build_support) so
   `cargo package -p buf-toolchain` packs the shared `*.rs` sources. `build.rs`
@@ -454,9 +491,7 @@ When the crate's own pinned Buf version moves (e.g. `1.40.0` → `1.41.0`):
   together).
 - Run `cargo generate-lockfile` so [`Cargo.lock`](Cargo.lock) reflects the new
   version.
-- Confirm tests with
-  `BUF_EXPECT_VERSION="$(cargo xtask expected-buf-version)"` (and
-  `echo "Expected Buf Version: ${BUF_EXPECT_VERSION}"` if you want a clear log
-  line) are still green.
+- Confirm the pin with `cargo xtask check` (`check` injects
+  `BUF_EXPECT_VERSION` from `cargo xtask expected-buf-version` when unset).
 - Optionally refresh example-only version mentions in [`README.md`](README.md) /
   this file so they stay helpful; they are not the source of truth.
