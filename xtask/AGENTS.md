@@ -15,7 +15,7 @@ member. [`.cargo/config.toml`](../.cargo/config.toml) maps `cargo xtask` to
   `cargo test --workspace --locked`. `fmt` does not receive feature flags.
   `check` and `clippy` use `--locked --workspace --all-targets`. `test` uses
   `--locked --workspace` without `--all-targets`, matching
-  [`.github/ci-scripts/run-examples.sh`](../.github/ci-scripts/run-examples.sh).
+  [`.github/workflows/rust-tests.yml`](../.github/workflows/rust-tests.yml).
   Clippy does not pass `-D warnings`. `ci` is a visible alias over exactly
   the same implementation.
 - When `BUF_EXPECT_VERSION` is unset, `check` (test step) and `coverage`
