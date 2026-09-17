@@ -123,6 +123,10 @@ jobs:
         with:
           ref: ${{ steps.default_branch.outputs.name }}
           fetch-depth: 0
+          # Do not persist GITHUB_TOKEN in http.extraheader. That header wins
+          # over an App-token push URL and GitHub reports permission denied to
+          # github-actions[bot].
+          persist-credentials: false
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -262,6 +266,7 @@ jobs:
           git add Cargo.toml Cargo.lock
           git commit -m "chore: bump Buf pin to ${LATEST}"
 
+          git config --unset-all http.https://github.com/.extraheader || true
           git push --force-with-lease "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" "HEAD:refs/heads/${HEAD}"
 
           BODY_FILE="$(mktemp)"
