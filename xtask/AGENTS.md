@@ -33,12 +33,13 @@ member. [`.cargo/config.toml`](../.cargo/config.toml) maps `cargo xtask` to
   `target/coverage/tarpaulin/tarpaulin-report.html`. Both `coverage --open`
   and `coverage-open` generate a fresh report first.
 - `image` builds the sibling Debian and Alpine integration images
-  (`debian`, `alpine`, `all`) with `auto|docker|buildah`. It path-preinstalls
-  `buf-toolchain` from this worktree and runs the shared
+  (`debian`, `alpine`, `all`) with `auto|docker|buildah`. It bind-mounts
+  this worktree at run and path-installs `buf-toolchain` from that mount,
+  then runs the shared
   [`entrypoint.sh`](../.github/ci/integration/entrypoint.sh) **with
-  network** (Buf download at build; validator + examples at run). Do not
-  pass `--network none`. Keep `image` off `check` / `ci`. Default tags:
-  `buf-rs-integration:debian` and `buf-rs-integration:alpine`. Never push.
+  network**. Do not pass `--network none`. Keep `image` off `check` /
+  `ci`. Default tags: `buf-rs-integration:debian` and
+  `buf-rs-integration:alpine`. Never push.
 - Repository-specific commands stay on the same CLI: `expected-buf-version`,
   `publish resolve|apply-version|verify-summary`, and
   `workspace set-buf-version`. Keep those aligned with

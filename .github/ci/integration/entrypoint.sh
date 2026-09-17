@@ -18,6 +18,8 @@ if [[ -n "${TEST_CRATE_VERSION:-}" ]]; then
     fi
 elif [[ -n "${EXPECT_BUF_CORE:-}" && -d /opt/path-src/buf-tools ]]; then
     echo "Integration test using path-preinstalled buf-toolchain; EXPECT_BUF_CORE=${EXPECT_BUF_CORE}"
+    cargo install --locked --root /usr/local --features validate-cli \
+        --path /opt/path-src/buf-toolchain
     cargo add --path /opt/path-src/buf-tools
     EXPECT_CORE="${EXPECT_BUF_CORE}"
 else

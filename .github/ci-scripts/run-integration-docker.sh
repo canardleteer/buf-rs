@@ -40,17 +40,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-mkdir -p "${CTX}/proto" "${CTX}/path-src"
-cp "${ROOT}/rust-toolchain.toml" "${CTX}/"
-cp "${ROOT}/.github/ci/integration/Cargo.toml" \
-    "${ROOT}/.github/ci/integration/Dockerfile" \
-    "${ROOT}/.github/ci/integration/Dockerfile.alpine" \
-    "${ROOT}/.github/ci/integration/entrypoint.sh" "${CTX}/"
-chmod +x "${CTX}/entrypoint.sh"
-cp "${ROOT}/examples/buf_lint.rs" "${ROOT}/examples/protoc_with_buf_plugins.rs" "${CTX}/"
-cp -r "${ROOT}/examples/proto/"* "${CTX}/proto/"
-# Registry images do not path-install; keep an empty tree so COPY path-src succeeds.
-: >"${CTX}/path-src/.keep"
+bash "${ROOT}/.github/ci-scripts/stage-integration-docker-context.sh" "${CTX}"
 
 run_one() {
     local flavor="$1"
@@ -64,7 +54,6 @@ run_one() {
     echo "Building ${image_tag} (${DOCKER}), RUST_DOCKER_TAG=${rust_tag}, file=${dockerfile}…"
     "${DOCKER}" build \
         --build-arg "RUST_DOCKER_TAG=${rust_tag}" \
-        --build-arg "INSTALL_MODE=registry" \
         -f "${CTX}/${dockerfile}" \
         -t "${image_tag}" \
         "${CTX}"

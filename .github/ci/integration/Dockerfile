@@ -1,5 +1,8 @@
 # Integration image — build context is staged by CI, run-integration-docker.sh, or cargo xtask image
-# (rust-toolchain.toml, this Cargo.toml, entrypoint.sh, examples *.rs + proto/, optional path-src/).
+# (rust-toolchain.toml, this Cargo.toml, entrypoint.sh, examples *.rs + proto/).
+# Do not COPY path-src: crates-io-publish may run this file from a feature
+# checkout while the workflow YAML (and staging) still come from main.
+# Path-preinstall bind-mounts workspace members at run (`cargo xtask image`).
 #
 # RUST_DOCKER_TAG comes from rust-toolchain.toml via
 # rust-docker-tag-from-toolchain.sh (`stable` → slim-bookworm).
@@ -25,12 +28,5 @@ RUN cargo fetch
 
 COPY entrypoint.sh ./
 RUN chmod +x entrypoint.sh
-
-# Optional workspace tree for path-preinstall (xtask). Registry staging copies an empty dir.
-COPY path-src /opt/path-src
-ARG INSTALL_MODE=registry
-RUN if [ "${INSTALL_MODE}" = "path" ]; then \
-      cargo install --locked --root /usr/local --features validate-cli --path /opt/path-src/buf-toolchain; \
-    fi
 
 ENTRYPOINT ["/app/entrypoint.sh"]

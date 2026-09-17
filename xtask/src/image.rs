@@ -116,10 +116,7 @@ fn docker(root: &Path, context: &Path, plan: &ImagePlan, expect_core: &str) -> R
     let mut build = CommandSpec::new("docker").arg("build");
     append_build_args(
         &mut build.args,
-        &[
-            ("RUST_DOCKER_TAG".to_string(), rust_tag),
-            ("INSTALL_MODE".to_string(), "path".to_string()),
-        ],
+        &[("RUST_DOCKER_TAG".to_string(), rust_tag)],
     );
     build.args.extend([
         "--tag".into(),
@@ -130,11 +127,14 @@ fn docker(root: &Path, context: &Path, plan: &ImagePlan, expect_core: &str) -> R
     ]);
     run_command(root, &build)?;
 
+    let path_src = context.join("path-src");
     run_command(
         root,
         &CommandSpec::new("docker").args([
             "run",
             "--rm",
+            "-v",
+            &format!("{}:/opt/path-src:ro", path_src.display()),
             "-e",
             &format!("EXPECT_BUF_CORE={expect_core}"),
             plan.tag.as_str(),
@@ -147,10 +147,7 @@ fn buildah(root: &Path, context: &Path, plan: &ImagePlan, expect_core: &str) -> 
     let mut build = CommandSpec::new("buildah").arg("bud");
     append_build_args(
         &mut build.args,
-        &[
-            ("RUST_DOCKER_TAG".to_string(), rust_tag),
-            ("INSTALL_MODE".to_string(), "path".to_string()),
-        ],
+        &[("RUST_DOCKER_TAG".to_string(), rust_tag)],
     );
     build.args.extend([
         "--tag".into(),
@@ -171,6 +168,8 @@ fn buildah(root: &Path, context: &Path, plan: &ImagePlan, expect_core: &str) -> 
             root,
             &CommandSpec::new("buildah").args([
                 "run",
+                "--volume",
+                &format!("{}:/opt/path-src:ro", context.join("path-src").display()),
                 "--env",
                 &format!("EXPECT_BUF_CORE={expect_core}"),
                 name.as_str(),
