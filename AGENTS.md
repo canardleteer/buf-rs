@@ -399,8 +399,9 @@ If a path fails, replay that path against the previous published
 pre-release of the same Buf core (for example the last `-rc.N`) to
 see whether the failure is new.
 
-Do not record machine-specific cache or home directories in this file
-or in PR text.
+Do not record usernames, host home directories, or other machine-local
+paths in this file, in crate READMEs, or in PR text. Describe isolation
+with `$CARGO_HOME`, `--root`, and `BUF_RS_CACHE_DIR` only.
 
 ## Linting
 
