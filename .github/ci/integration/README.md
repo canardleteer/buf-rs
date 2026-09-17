@@ -88,3 +88,7 @@ TEST_CRATE_VERSION="$(bash .github/ci-scripts/read-workspace-version.sh)" \
 |----------|---------|
 | **`TEST_CRATE_VERSION`** | Full published semver for registry `cargo add` / `cargo install`. |
 | **`EXPECT_BUF_CORE`** | Buf `X.Y.Z` when path-preinstall is used (`cargo xtask image`). |
+
+Path-preinstall sets `CARGO_INSTALL_ROOT=/usr/local` so `buf` lands next
+to `validate-cargo-buf-toolchain`. `cargo install --root` does not reach
+`build.rs`.

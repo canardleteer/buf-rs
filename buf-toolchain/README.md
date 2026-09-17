@@ -41,8 +41,10 @@ On build (including `cargo install buf-toolchain` or as a build dependency),
 4. Installs `buf`, `protoc-gen-buf-breaking`, and `protoc-gen-buf-lint` (with
    `.exe` on Windows) into one directory using atomic writes.
 
-Default install directory: `$CARGO_HOME/bin` (often `~/.cargo/bin`). Override
-with `BUF_RS_TOOLCHAIN_BIN_DIR`.
+Default install directory: `$CARGO_HOME/bin` (often `~/.cargo/bin`).
+Override with `BUF_RS_TOOLCHAIN_BIN_DIR`, or set `CARGO_INSTALL_ROOT`
+(Cargo's `install.root`; binaries go in `<root>/bin`). `cargo install
+--root` is not visible to `build.rs`.
 
 `cargo install` also places the `validate-cargo-buf-toolchain` binary on `PATH`
 for post-install checks.
@@ -55,8 +57,10 @@ authoritative table.
 
 Install location:
 
-- `BUF_RS_TOOLCHAIN_BIN_DIR`: if non-empty, install only here; otherwise
-  `$CARGO_HOME/bin`.
+- `BUF_RS_TOOLCHAIN_BIN_DIR`: if non-empty, install only here.
+- `CARGO_INSTALL_ROOT`: if `BUF_RS_TOOLCHAIN_BIN_DIR` is unset, install
+  under `<CARGO_INSTALL_ROOT>/bin`.
+- Otherwise `$CARGO_HOME/bin`.
 
 Cache and downloads:
 

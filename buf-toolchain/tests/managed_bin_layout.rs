@@ -212,6 +212,50 @@ fn nested_bin_dir_override_skips_cargo_bin() {
 
 #[test]
 #[ignore = "nested cargo + cold cache needs network"]
+fn nested_cargo_install_root_skips_cargo_bin() {
+    let scratch = Scratch::new("buf-tc-install-root");
+    let install_root = scratch.path().join("install-root");
+    let fake_cargo = scratch.path().join(".cargo");
+    fs::create_dir_all(install_root.join("bin")).expect("mkdir install-root bin");
+    fs::create_dir_all(fake_cargo.join("bin")).expect("mkdir fake cargo bin");
+    let cache_root = scratch.path().join("cache-root");
+
+    let st = Command::new("cargo")
+        .current_dir(workspace_root())
+        .env("CARGO_HOME", &fake_cargo)
+        .env("CARGO_INSTALL_ROOT", &install_root)
+        .env("BUF_RS_CACHE_DIR", &cache_root)
+        .args(["build", "-p", "buf-toolchain", "--locked"])
+        .status()
+        .expect("spawn cargo");
+    assert!(st.success(), "nested cargo build failed");
+
+    let canonical = install_root.join("bin").join(local_buf_name());
+    assert!(
+        canonical.is_file(),
+        "expected CARGO_INSTALL_ROOT/bin install at {:?}",
+        canonical
+    );
+
+    let cargo_stub = fake_cargo.join("bin").join(local_buf_name());
+    assert!(
+        !cargo_stub.exists(),
+        "CARGO_INSTALL_ROOT must beat CARGO_HOME; unexpected {:?}",
+        cargo_stub
+    );
+
+    let triple = rustc_host_triple();
+    let upstream = cache_root
+        .join(semver_core())
+        .join(&triple)
+        .join(remote_buf_object_name_for_triple(&triple));
+    let installed = fs::read(&canonical).expect("read installed");
+    let cached = fs::read(&upstream).expect("read cache");
+    assert_eq!(installed, cached);
+}
+
+#[test]
+#[ignore = "nested cargo + cold cache needs network"]
 fn nested_offline_reuses_verified_cache() {
     let scratch = Scratch::new("buf-tc-offline");
     let fake_cargo = scratch.path().join(".cargo");

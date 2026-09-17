@@ -26,6 +26,51 @@ pub fn cache_dir() -> Option<PathBuf> {
     )
 }
 
+/// Directory that receives `buf` / `protoc-gen-buf-*` from buf-toolchain
+/// `build.rs` (and that `validate-cargo-buf-toolchain` probes).
+///
+/// Order: non-empty `BUF_RS_TOOLCHAIN_BIN_DIR`; non-empty
+/// `CARGO_INSTALL_ROOT` plus `bin` (Cargo `install.root`); `$CARGO_HOME/bin`;
+/// `$HOME/.cargo/bin`.
+///
+/// `cargo install --root` is not visible to build scripts. Set
+/// `CARGO_INSTALL_ROOT` or `BUF_RS_TOOLCHAIN_BIN_DIR` to isolate installs.
+pub fn toolchain_bin_dir() -> (PathBuf, &'static str) {
+    toolchain_bin_dir_from(
+        env::var("BUF_RS_TOOLCHAIN_BIN_DIR").ok(),
+        env::var("CARGO_INSTALL_ROOT").ok(),
+        env::var("CARGO_HOME").ok(),
+        home_dir(),
+    )
+}
+
+fn nonempty_trimmed(v: Option<String>) -> Option<PathBuf> {
+    v.map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .map(PathBuf::from)
+}
+
+fn toolchain_bin_dir_from(
+    toolchain_bin_dir: Option<String>,
+    cargo_install_root: Option<String>,
+    cargo_home: Option<String>,
+    home: Option<PathBuf>,
+) -> (PathBuf, &'static str) {
+    if let Some(dir) = nonempty_trimmed(toolchain_bin_dir) {
+        return (dir, "BUF_RS_TOOLCHAIN_BIN_DIR");
+    }
+    if let Some(root) = nonempty_trimmed(cargo_install_root) {
+        return (root.join("bin"), "CARGO_INSTALL_ROOT");
+    }
+    if let Some(dir) = nonempty_trimmed(cargo_home) {
+        return (dir.join("bin"), "CARGO_HOME");
+    }
+    match home {
+        Some(h) => (h.join(".cargo").join("bin"), "default_home"),
+        None => (PathBuf::from(".cargo").join("bin"), "default_home"),
+    }
+}
+
 fn nonempty_path(v: Option<OsString>) -> Option<PathBuf> {
     v.filter(|s| !s.is_empty()).map(PathBuf::from)
 }
@@ -67,6 +112,42 @@ fn cache_dir_under_home(home: PathBuf) -> PathBuf {
 mod tests {
     use super::*;
     use std::path::Path;
+
+    #[test]
+    fn toolchain_bin_dir_prefers_explicit_override() {
+        let (got, src) = toolchain_bin_dir_from(
+            Some("/managed-bin".into()),
+            Some("/install-root".into()),
+            Some("/cargo-home".into()),
+            Some(PathBuf::from("/home/me")),
+        );
+        assert_eq!(got, PathBuf::from("/managed-bin"));
+        assert_eq!(src, "BUF_RS_TOOLCHAIN_BIN_DIR");
+    }
+
+    #[test]
+    fn toolchain_bin_dir_uses_cargo_install_root_before_cargo_home() {
+        let (got, src) = toolchain_bin_dir_from(
+            Some("  ".into()),
+            Some("/install-root".into()),
+            Some("/cargo-home".into()),
+            Some(PathBuf::from("/home/me")),
+        );
+        assert_eq!(got, PathBuf::from("/install-root/bin"));
+        assert_eq!(src, "CARGO_INSTALL_ROOT");
+    }
+
+    #[test]
+    fn toolchain_bin_dir_falls_back_to_cargo_home() {
+        let (got, src) = toolchain_bin_dir_from(
+            None,
+            None,
+            Some("/cargo-home".into()),
+            Some(PathBuf::from("/home/me")),
+        );
+        assert_eq!(got, PathBuf::from("/cargo-home/bin"));
+        assert_eq!(src, "CARGO_HOME");
+    }
 
     #[test]
     fn xdg_cache_home_wins() {

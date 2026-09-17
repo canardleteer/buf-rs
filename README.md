@@ -86,8 +86,11 @@ runs the same `build.rs` without `cargo install`:
 buf-toolchain = "1.40.0"
 ```
 
-- `BUF_RS_TOOLCHAIN_BIN_DIR` (optional): install into this directory instead
-  of `$CARGO_HOME/bin`.
+- `BUF_RS_TOOLCHAIN_BIN_DIR` (optional): install into this directory
+  instead of `$CARGO_HOME/bin`.
+- `CARGO_INSTALL_ROOT` (optional): if `BUF_RS_TOOLCHAIN_BIN_DIR` is
+  unset, install under `<CARGO_INSTALL_ROOT>/bin`. `cargo install --root`
+  does not reach `build.rs`.
 - Otherwise binaries go to `$CARGO_HOME/bin` (or `~/.cargo/bin`).
 - `BUF_RS_CACHE_DIR` (optional) overrides the download cache root.
 - `BUF_RS_RELEASE_BASE_URL` (optional) overrides the release asset base URL for

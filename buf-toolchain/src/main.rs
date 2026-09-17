@@ -3,7 +3,7 @@
 
 use std::env;
 use std::io::Read;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::{Command, ExitCode, Stdio};
 
 use clap::Parser;
@@ -62,7 +62,8 @@ fn main() -> ExitCode {
 fn collect_report() -> ValidateReport {
     let crate_version = env!("CARGO_PKG_VERSION").to_string();
     let semver_core = semver_core(&crate_version);
-    let (bin_dir, bin_dir_source) = resolve_canonical_bin_dir();
+    let (bin_dir, bin_dir_source) = paths::toolchain_bin_dir();
+    let bin_dir_source = bin_dir_source.to_string();
     let host_triple = host_triple();
     let release_target = host_triple.as_deref().and_then(from_rust_triple);
 
@@ -353,6 +354,7 @@ fn env_snapshot() -> Vec<EnvEntry> {
         ("BUF_RS_CACHE_DIR", "buf-toolchain"),
         ("BUF_RS_RELEASE_BASE_URL", "buf-toolchain"),
         ("BUF_RS_VALIDATE_OFFLINE", "buf-toolchain"),
+        ("CARGO_INSTALL_ROOT", "cargo"),
         ("CARGO_HOME", "cargo"),
         ("BUF_RS_LAYOUT_MODE", "buf-tools-only"),
         ("BUF_RS_BUILD_LOG", "buf-tools-only"),
@@ -426,29 +428,6 @@ fn buf_stdout_matches_expect(stdout: &str, expect_pkg_version: &str) -> bool {
         return true;
     }
     false
-}
-
-fn resolve_canonical_bin_dir() -> (PathBuf, String) {
-    if let Ok(dir) = env::var("BUF_RS_TOOLCHAIN_BIN_DIR") {
-        let d = dir.trim();
-        if !d.is_empty() {
-            return (PathBuf::from(d), "BUF_RS_TOOLCHAIN_BIN_DIR".to_string());
-        }
-    }
-    if env::var("CARGO_HOME").is_ok() {
-        return (cargo_home_bin(), "CARGO_HOME".to_string());
-    }
-    (cargo_home_bin(), "default_home".to_string())
-}
-
-fn cargo_home_bin() -> PathBuf {
-    if let Ok(home) = env::var("CARGO_HOME") {
-        return PathBuf::from(home).join("bin");
-    }
-    match paths::home_dir() {
-        Some(h) => h.join(".cargo").join("bin"),
-        None => PathBuf::from(".cargo").join("bin"),
-    }
 }
 
 /// Rust host triple for mapping to Buf asset suffixes (matches nested integration tests).

@@ -21,6 +21,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("cargo:rerun-if-env-changed=BUF_RS_TOOLCHAIN_BIN_DIR");
     println!("cargo:rerun-if-env-changed=BUF_RS_CACHE_DIR");
     println!("cargo:rerun-if-env-changed=BUF_RS_RELEASE_BASE_URL");
+    println!("cargo:rerun-if-env-changed=CARGO_INSTALL_ROOT");
     println!("cargo:rerun-if-env-changed=CARGO_HOME");
     println!("cargo:rerun-if-env-changed=CARGO_NET_OFFLINE");
     println!("cargo:rerun-if-env-changed=DOCS_RS");
@@ -49,7 +50,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .into());
     }
 
-    let canonical_bin_dir = resolve_canonical_bin_dir()?;
+    let (canonical_bin_dir, _) = build_support::paths::toolchain_bin_dir();
     fs::create_dir_all(&canonical_bin_dir)?;
 
     let cache_root = resolve_cache_root()?;
@@ -176,17 +177,6 @@ fn emit_toolchain_warn(msg: String) {
     println!("cargo:warning={}", line);
 }
 
-/// Install destination: `BUF_RS_TOOLCHAIN_BIN_DIR`, else `$CARGO_HOME/bin`.
-fn resolve_canonical_bin_dir() -> Result<PathBuf, String> {
-    if let Ok(dir) = env::var("BUF_RS_TOOLCHAIN_BIN_DIR") {
-        let d = dir.trim();
-        if !d.is_empty() {
-            return Ok(PathBuf::from(d));
-        }
-    }
-    Ok(cargo_home_dir()?.join("bin"))
-}
-
 fn resolve_cache_root() -> Result<PathBuf, String> {
     if let Ok(dir) = env::var("BUF_RS_CACHE_DIR") {
         return Ok(PathBuf::from(dir));
@@ -194,15 +184,6 @@ fn resolve_cache_root() -> Result<PathBuf, String> {
     build_support::paths::cache_dir()
         .ok_or_else(|| "buf-toolchain: cannot resolve cache dir".to_string())
         .map(|p| p.join("buf-toolchain"))
-}
-
-fn cargo_home_dir() -> Result<PathBuf, String> {
-    if let Ok(home) = env::var("CARGO_HOME") {
-        return Ok(PathBuf::from(home));
-    }
-    let home = build_support::paths::home_dir()
-        .ok_or_else(|| "buf-toolchain: cannot resolve HOME".to_string())?;
-    Ok(home.join(".cargo"))
 }
 
 fn resolve_base_url(name: &str, default: &str) -> Result<String, String> {
