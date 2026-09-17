@@ -1,11 +1,10 @@
 # -----------------------------------------------------------------------------
 # Workspace CI: cargo xtask check, buf-tools examples, cargo audit, and
 # cargo-deny (licenses + sources).
-# Rustfmt/clippy/test orchestration is `cargo xtask check` inside
-# .github/ci-scripts/run-examples.sh, then the script runs the examples.
-# That script sets BUF_EXPECT_VERSION via `cargo xtask expected-buf-version`
-# (Buf core from root [workspace.package].version). Keep the script aligned
-# with xtask check; the xtask does not inspect this workflow.
+# Quality gates are `cargo xtask check` (alias `ci`) in this workflow. Keep
+# those steps aligned with xtask; the xtask does not inspect this file.
+# Examples stay in .github/ci-scripts/run-examples.sh (no fmt/clippy/test).
+# BUF_EXPECT_VERSION comes from `cargo xtask expected-buf-version`.
 # Audit + deny run once in a separate job (same Cargo.lock on every host).
 # -----------------------------------------------------------------------------
 name: rust-tests
@@ -89,8 +88,17 @@ jobs:
           toolchain: stable
           components: rustfmt, clippy
 
-      # Run cargo xtask check, then buf_lint + protoc_with_buf_plugins.
-      - name: Run workspace CI script
+      - name: Set BUF_EXPECT_VERSION
+        run: |
+          set -euo pipefail
+          CORE="$(cargo xtask expected-buf-version)"
+          echo "BUF_EXPECT_VERSION=${CORE}" >> "${GITHUB_ENV}"
+          echo "Expected Buf Version: ${CORE}"
+
+      - name: cargo xtask check
+        run: cargo xtask check
+
+      - name: Run buf-tools examples
         run: bash .github/ci-scripts/run-examples.sh
 
       - name: buf-tools cargo-install layout smoke (linux-amd64)
@@ -138,7 +146,7 @@ jobs:
             audit-tools-${{ runner.os }}-
 
       - name: Install cargo-binstall
-        uses: cargo-bins/cargo-binstall@v1.22.0
+        uses: cargo-bins/cargo-binstall@v1.23.0
 
       - name: Install cargo-deny and cargo-audit
         run: cargo binstall --no-confirm --disable-strategies compile cargo-deny@0.20.2 cargo-audit@0.22.2

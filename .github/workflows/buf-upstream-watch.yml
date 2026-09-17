@@ -259,7 +259,7 @@ jobs:
           mkdir -p "${BUF_RS_CACHE_DIR}"
           export BUF_EXPECT_VERSION="$(cargo xtask expected-buf-version)"
           echo "Expected Buf Version: ${BUF_EXPECT_VERSION}"
-          cargo xtask check --only fmt,test
+          cargo xtask check
 
           git add Cargo.toml Cargo.lock
           git commit -m "chore: bump Buf pin to ${LATEST}"

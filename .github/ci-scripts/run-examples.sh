@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 # -----------------------------------------------------------------------------
-# CI entrypoint: cargo xtask check (fmt, check, clippy, test), then run
-# buf-tools examples (buf_lint + protoc_with_buf_plugins). Requires network
-# for Buf downloads during build.rs unless cache is warm.
+# Run buf-tools examples (buf_lint + protoc_with_buf_plugins). Quality gates
+# live in `cargo xtask check`; this script does not re-run them. Requires
+# network for Buf downloads during build.rs unless cache is warm.
 #
 # Environment:
 #   GITHUB_WORKSPACE — if set (Actions), cd there before running (default: cwd).
 #   BUF_RS_CACHE_DIR   — optional; defaults to <repo>/target/buf-rs-cache
+#   BUF_EXPECT_VERSION — optional; set from `cargo xtask expected-buf-version`
+#                        when unset.
 # -----------------------------------------------------------------------------
 set -euo pipefail
 
@@ -21,13 +23,11 @@ cd "$ROOT"
 export BUF_RS_CACHE_DIR="${BUF_RS_CACHE_DIR:-${ROOT}/target/buf-rs-cache}"
 mkdir -p "${BUF_RS_CACHE_DIR}"
 
-# Same Buf core as `build.rs` / README: major.minor.patch from [workspace.package].version.
-BUF_EXPECT_VERSION="$(cargo xtask expected-buf-version)"
-export BUF_EXPECT_VERSION
-echo "Expected Buf Version: ${BUF_EXPECT_VERSION}"
-
-echo "==> cargo xtask check"
-cargo xtask check
+if [[ -z "${BUF_EXPECT_VERSION:-}" ]]; then
+  BUF_EXPECT_VERSION="$(cargo xtask expected-buf-version)"
+  export BUF_EXPECT_VERSION
+  echo "Expected Buf Version: ${BUF_EXPECT_VERSION}"
+fi
 
 echo "==> cargo build -p buf-tools --locked (ensure buf present for examples)"
 cargo build -p buf-tools --locked
@@ -47,4 +47,4 @@ cargo run -p buf-tools-examples --locked --example buf_lint
 echo "==> cargo run -p buf-tools-examples --example protoc_with_buf_plugins"
 cargo run -p buf-tools-examples --locked --example protoc_with_buf_plugins
 
-echo "==> CI script finished successfully"
+echo "==> examples script finished successfully"
