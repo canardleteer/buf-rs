@@ -7,25 +7,56 @@
 # 1) Actions enabled
 #    Settings → Actions → General → allow Actions for this repository.
 #
-# 2) Workflow permissions (GITHUB_TOKEN)
-#    Settings → Actions → General → Workflow permissions → **Read and write**
-#    so this workflow can `git push` a branch and `gh pr create`. If your org
-#    enforces read-only tokens, allow an override for this repo or use a custom
-#    credential (not covered here).
+# 2) GitHub App so pull_request checks attach
+#    Events created with `GITHUB_TOKEN` do not start other workflows. A bump
+#    opened as `github-actions[bot]` therefore leaves the main ruleset waiting
+#    on `ci (linux-amd64)`, `ci (linux-arm64)`, `ci (macos-arm64)`,
+#    `ci (windows-amd64)`, and `rumdl`. `workflow_dispatch` runs do not satisfy
+#    those required checks. This job opens the branch and PR with a GitHub App
+#    installation token instead.
+#    Docs: https://docs.github.com/en/actions/using-workflows/triggering-a-workflow#triggering-a-workflow-from-a-workflow
+#    Docs: https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/making-authenticated-api-requests-with-a-github-app-in-a-github-actions-workflow
 #
-# 3) Allow Actions to create pull requests (if your org shows this toggle)
-#    Enable so the workflow can open the automated bump PR.
+#    Configured on this repository:
+#      Variable `BUF_UPSTREAM_WATCH_APP_CLIENT_ID`
+#      Secret `BUF_UPSTREAM_WATCH_APP_PRIVATE_KEY`
+#      App slug `canardleteer-buf-rs-watch` (installed on this repo only)
+#    Optional fallback: secret `BUF_UPSTREAM_WATCH_TOKEN` (fine-grained PAT
+#    from a collaborator who already has a green `pull_request` run here).
+#    Do not use `GITHUB_TOKEN` for push or `gh pr create`.
+#    Do not use `pull_request_target`. Do not loosen first-time-contributor /
+#    fork workflow approval to paper over missing credentials.
 #
-# 4) GITHUB_TOKEN does not trigger other workflows (including pull_request on rust-tests)
-#    when this job pushes a branch and opens a PR. After creating the bump PR, this workflow
-#    dispatches rust-tests via `gh workflow run` (needs **actions: write** below). To re-run
-#    manually: **Actions** → **rust-tests** → **Run workflow** → branch `automated/buf/X.Y.Z`.
+#    Recreate the App (personal account; this repo is user-owned):
+#    a) https://github.com/settings/apps/new — webhook off; only this account;
+#       Contents + Pull requests read/write. Homepage may be this repo URL.
+#       Docs: https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/registering-a-github-app
+#       Permissions: https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/choosing-permissions-for-a-github-app
+#    b) gh variable set BUF_UPSTREAM_WATCH_APP_CLIENT_ID --repo OWNER/REPO \
+#         --body 'Iv23...'
+#       UI: https://github.com/OWNER/REPO/settings/variables/actions
+#    c) Generate a private key on the App General page, then:
+#         gh secret set BUF_UPSTREAM_WATCH_APP_PRIVATE_KEY --repo OWNER/REPO \
+#           < /path/to/app.pem
+#       UI: https://github.com/OWNER/REPO/settings/secrets/actions
+#    d) Install on this repository only:
+#       https://docs.github.com/en/apps/using-github-apps/installing-your-own-github-app
+#       Confirm: https://github.com/OWNER/REPO/settings/installations
+#    PAT fallback: https://github.com/settings/personal-access-tokens/new
+#       (this repo only; Contents + Pull requests read/write), then
+#         gh secret set BUF_UPSTREAM_WATCH_TOKEN --repo OWNER/REPO < token-file
+#       Docs: https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-fine-grained-personal-access-token
 #
-# 5) Default branch
+# 3) Workflow permissions (GITHUB_TOKEN)
+#    Read is enough. This workflow uses `GITHUB_TOKEN` only to inspect the repo
+#    and list open PRs. The App token (or PAT) performs `git push` and
+#    `gh pr create`. Org-level read-only tokens are fine.
+#
+# 4) Default branch
 #    `schedule` only runs workflows from the **default branch**; merge this file
 #    there for cron to fire.
 #
-# 6) repository_dispatch from outside GitHub
+# 5) repository_dispatch from outside GitHub
 #    Callers need a token with access to this repo (e.g. classic PAT `repo`, or
 #    fine-grained token with Contents + Metadata). Example:
 #    curl -L -X POST -H "Accept: application/vnd.github+json"
@@ -65,9 +96,8 @@ on:
     types: [buf-release]
 
 permissions:
-  contents: write
-  pull-requests: write
-  actions: write
+  contents: read
+  pull-requests: read
 
 concurrency:
   group: buf-upstream-watch
@@ -164,8 +194,22 @@ jobs:
             echo "- No PR opened (already on or past upstream core)."
           } >> "${GITHUB_STEP_SUMMARY}"
 
+      - name: Create GitHub App token
+        if: steps.compare.outputs.should_bump == 'true' && vars.BUF_UPSTREAM_WATCH_APP_CLIENT_ID != ''
+        id: app-token
+        uses: actions/create-github-app-token@v3.2.0
+        with:
+          client-id: ${{ vars.BUF_UPSTREAM_WATCH_APP_CLIENT_ID }}
+          private-key: ${{ secrets.BUF_UPSTREAM_WATCH_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
       - name: Bump, test, push, open PR (or skip if duplicate)
         if: steps.compare.outputs.should_bump == 'true'
+        env:
+          APP_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+          PAT_TOKEN: ${{ secrets.BUF_UPSTREAM_WATCH_TOKEN }}
         run: |
           set -euo pipefail
           LATEST="${{ steps.upstream.outputs.latest }}"
@@ -184,8 +228,24 @@ jobs:
             exit 0
           fi
 
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if [[ -n "${APP_TOKEN}" ]]; then
+            GH_TOKEN="${APP_TOKEN}"
+            git config user.name "${APP_SLUG}[bot]"
+            git config user.email "${APP_SLUG}[bot]@users.noreply.github.com"
+          elif [[ -n "${PAT_TOKEN}" ]]; then
+            GH_TOKEN="${PAT_TOKEN}"
+            actor_login="$(gh api user --jq .login)"
+            actor_id="$(gh api user --jq .id)"
+            git config user.name "${actor_login}"
+            git config user.email "${actor_id}+${actor_login}@users.noreply.github.com"
+          else
+            echo "error: missing bump credentials" >&2
+            echo "Set repository variable BUF_UPSTREAM_WATCH_APP_CLIENT_ID and secret BUF_UPSTREAM_WATCH_APP_PRIVATE_KEY (preferred)," >&2
+            echo "or secret BUF_UPSTREAM_WATCH_TOKEN (fine-grained PAT from a known collaborator)." >&2
+            echo "See the header comments in .github/workflows/buf-upstream-watch.yml." >&2
+            exit 1
+          fi
+          export GH_TOKEN
 
           git checkout -b "${HEAD}"
 
@@ -202,7 +262,7 @@ jobs:
           git add Cargo.toml Cargo.lock
           git commit -m "chore: bump Buf pin to ${LATEST}"
 
-          git push -u origin "${HEAD}" --force-with-lease
+          git push --force-with-lease "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" "HEAD:refs/heads/${HEAD}"
 
           BODY_FILE="$(mktemp)"
           trap 'rm -f "${BODY_FILE}"' EXIT
@@ -230,16 +290,7 @@ jobs:
               - [ ] Review changelog / breaking changes upstream
               - [ ] Merge when CI is green, or try a **dev** publish first (below)
 
-              ### CI (required status checks)
-
-              Bot-opened PRs do not auto-run **rust-tests** (GITHUB_TOKEN limitation). This workflow dispatches the matrix after opening the PR; re-run if needed.
-
-              **Actions UI:** **Actions** → **rust-tests** → **Run workflow** → branch `{head}`
-
-              **CLI:**
-              ```bash
-              gh workflow run rust-tests.yml --repo {repo} --ref {head}
-              ```
+              Required checks (`ci (linux-amd64)`, `ci (linux-arm64)`, `ci (macos-arm64)`, `ci (windows-amd64)`, `rumdl`) come from `pull_request` workflows. This PR is opened with the watch GitHub App so those runs attach. `workflow_dispatch` does not satisfy the ruleset.
 
               ### Try a dev crates.io publish (without merging to `{base}`)
 
@@ -279,11 +330,9 @@ jobs:
             exit 1
           fi
 
-          gh workflow run rust-tests.yml --ref "${HEAD}"
-
           {
             echo "## Buf upstream watch — opened PR"
             echo "- **${CURRENT}** → **${LATEST}**"
             echo "- Branch: \`${HEAD}\`"
-            echo "- Dispatched **rust-tests** on \`${HEAD}\` (required checks for the ruleset)."
+            echo "- Opened with a GitHub App or collaborator PAT so \`pull_request\` rust-tests and rumdl attach as required checks."
           } >> "${GITHUB_STEP_SUMMARY}"
