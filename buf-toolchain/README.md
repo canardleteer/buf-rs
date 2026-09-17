@@ -64,9 +64,12 @@ Cache and downloads:
 - `BUF_RS_RELEASE_BASE_URL`: optional prefix for release assets (default
   `https://github.com/bufbuild/buf/releases/download/v{X.Y.Z}/`).
 
-Validation helper (`validate-cargo-buf-toolchain` binary):
+Validation helper (`validate-cargo-buf-toolchain` binary; `validate-cli` feature,
+enabled automatically by `cargo install`):
 
 - `BUF_RS_VALIDATE_OFFLINE=1`: skip GitHub and crates.io network calls.
+- `--yaml`: machine-readable report on stdout (install env, bin dir rule,
+  per-binary status, GitHub / crates.io).
 
 Options that apply only when depending on `buf-tools` directly (layout, build
 log, source bundles) are documented in the [buf-tools docs][docs-buf-tools].
@@ -94,11 +97,15 @@ The same cache-slot lock as `buf-tools` serializes writers under
 ```bash
 cargo install buf-toolchain
 validate-cargo-buf-toolchain
+validate-cargo-buf-toolchain --yaml
 ```
 
 `validate-cargo-buf-toolchain` re-checks installed binaries against the pinned
 GitHub release, optionally compares `releases/latest`, and can query crates.io
-unless `BUF_RS_VALIDATE_OFFLINE=1`.
+unless `BUF_RS_VALIDATE_OFFLINE=1`. `--yaml` writes one machine-readable
+document (crate pin, resolved bin dir and which env rule won, install env
+snapshot, per-binary status, and network / crates.io results). Human text
+stays the default.
 
 Custom directory:
 

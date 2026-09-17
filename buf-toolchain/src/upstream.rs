@@ -52,12 +52,36 @@ fn resolve_release_base(installed_core: &str) -> Result<String, String> {
     Ok(base)
 }
 
+/// One local filename that matched the GitHub `sha256.txt` entry.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct VerifiedAsset {
+    pub local_name: String,
+    pub remote: String,
+}
+
+/// Comparison of installed Buf to GitHub `releases/latest` and crates.io.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct UpgradeReport {
+    pub latest_github_core: Option<String>,
+    pub comparison: UpgradeComparison,
+    pub message: String,
+    pub crates_io: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum UpgradeComparison {
+    Newer,
+    Same,
+    Older,
+    Error,
+}
+
 /// Download official `sha256.txt` + `.minisig`, verify signature, compare local files to manifest.
 pub fn verify_binaries_against_github_release(
     bin_dir: &Path,
     rt: &ReleaseTarget,
     installed_core: &str,
-) -> Result<(), String> {
+) -> Result<Vec<VerifiedAsset>, String> {
     let base = resolve_release_base(installed_core)?;
     let sha256_txt = http_get(&format!("{base}sha256.txt"), None)?;
     let minisig = http_get(&format!("{base}sha256.txt.minisig"), None)?;
@@ -84,6 +108,7 @@ pub fn verify_binaries_against_github_release(
         ));
     }
 
+    let mut verified = Vec::new();
     for (remote, local_name) in triples(rt) {
         let path = bin_dir.join(&local_name);
         let bytes = std::fs::read(&path).map_err(|e| format!("read {}: {e}", path.display()))?;
@@ -96,9 +121,12 @@ pub fn verify_binaries_against_github_release(
                 "SHA256 mismatch for {local_name}: disk {got} != upstream manifest {expect} ({remote})"
             ));
         }
-        println!("  {local_name:24}OK   matches GitHub sha256.txt ({remote})");
+        verified.push(VerifiedAsset {
+            local_name,
+            remote: remote.to_string(),
+        });
     }
-    Ok(())
+    Ok(verified)
 }
 
 fn target_supported(checksums: &HashMap<String, String>, t: &ReleaseTarget) -> bool {
@@ -160,43 +188,71 @@ pub fn crates_io_buf_toolchain_exists() -> Result<bool, String> {
 }
 
 /// Compare installed Buf to GitHub `latest` and report crates.io `buf-toolchain` availability.
-pub fn report_newer_and_crates_io(installed_core: &str) {
+pub fn collect_upgrade_report(installed_core: &str) -> UpgradeReport {
     let Ok(latest) = github_latest_buf_core() else {
-        println!("  (could not reach GitHub API for latest release)");
-        return;
+        return UpgradeReport {
+            latest_github_core: None,
+            comparison: UpgradeComparison::Error,
+            message: "(could not reach GitHub API for latest release)".to_string(),
+            crates_io: None,
+        };
     };
 
     let Ok(installed_v) = Version::parse(installed_core) else {
-        println!("  (could not parse installed version for comparison)");
-        return;
+        return UpgradeReport {
+            latest_github_core: Some(latest),
+            comparison: UpgradeComparison::Error,
+            message: "(could not parse installed version for comparison)".to_string(),
+            crates_io: None,
+        };
     };
     let Ok(latest_v) = Version::parse(&latest) else {
-        println!("  (could not parse GitHub tag as semver: {latest})");
-        return;
+        return UpgradeReport {
+            latest_github_core: Some(latest.clone()),
+            comparison: UpgradeComparison::Error,
+            message: format!("(could not parse GitHub tag as semver: {latest})"),
+            crates_io: None,
+        };
     };
 
     if latest_v > installed_v {
-        println!("  Latest Buf on GitHub: {latest} (you have {installed_core})");
-        match crates_io_buf_toolchain_exists() {
-            Ok(false) => println!(
-                "  crates.io package `buf-toolchain`: not found (unpublished or different name)."
+        let crates_io = match crates_io_buf_toolchain_exists() {
+            Ok(false) => Some(
+                "crates.io package `buf-toolchain`: not found (unpublished or different name)."
+                    .to_string(),
             ),
             Ok(true) => match crates_io_has_buf_toolchain_version(&latest) {
-                Ok(true) => println!(
-                    "  crates.io `buf-toolchain` {latest}: published — `cargo install buf-toolchain@{latest}` may work."
-                ),
-                Ok(false) => println!(
-                    "  crates.io `buf-toolchain` {latest}: not published yet (no matching semver)."
-                ),
-                Err(e) => println!("  crates.io lookup failed: {e}"),
+                Ok(true) => Some(format!(
+                    "crates.io `buf-toolchain` {latest}: published — `cargo install buf-toolchain@{latest}` may work."
+                )),
+                Ok(false) => Some(format!(
+                    "crates.io `buf-toolchain` {latest}: not published yet (no matching semver)."
+                )),
+                Err(e) => Some(format!("crates.io lookup failed: {e}")),
             },
-            Err(e) => println!("  crates.io crate check failed: {e}"),
+            Err(e) => Some(format!("crates.io crate check failed: {e}")),
+        };
+        UpgradeReport {
+            latest_github_core: Some(latest.clone()),
+            comparison: UpgradeComparison::Newer,
+            message: format!("Latest Buf on GitHub: {latest} (you have {installed_core})"),
+            crates_io,
         }
     } else if latest_v == installed_v {
-        println!("  GitHub `releases/latest` is v{latest} — same as your installed Buf.");
+        UpgradeReport {
+            latest_github_core: Some(latest.clone()),
+            comparison: UpgradeComparison::Same,
+            message: format!("GitHub `releases/latest` is v{latest} — same as your installed Buf."),
+            crates_io: None,
+        }
     } else {
-        println!(
-            "  GitHub `releases/latest` is v{latest}, older than your installed {installed_core} (unusual: pre-release install or API lag)."
-        );
+        UpgradeReport {
+            latest_github_core: Some(latest.clone()),
+            comparison: UpgradeComparison::Older,
+            message: format!(
+                "GitHub `releases/latest` is v{latest}, older than your installed {installed_core} (unusual: pre-release install or API lag)."
+            ),
+            crates_io: None,
+        }
     }
 }
