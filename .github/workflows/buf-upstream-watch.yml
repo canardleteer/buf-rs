@@ -192,12 +192,10 @@ jobs:
           cargo xtask workspace set-buf-version "${LATEST}"
           cargo generate-lockfile
 
-          cargo fmt --all -- --check
-
           mkdir -p "${BUF_RS_CACHE_DIR}"
           export BUF_EXPECT_VERSION="$(cargo xtask expected-buf-version)"
           echo "Expected Buf Version: ${BUF_EXPECT_VERSION}"
-          cargo test --workspace --locked
+          cargo xtask check --only fmt,test
 
           git add Cargo.toml Cargo.lock
           git commit -m "chore: bump Buf pin to ${LATEST}"

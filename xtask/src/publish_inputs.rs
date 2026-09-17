@@ -8,7 +8,7 @@ use std::io::Write;
 
 use clap::ValueEnum;
 
-#[derive(Clone, Copy, ValueEnum)]
+#[derive(Clone, Copy, Debug, ValueEnum)]
 pub enum PublishChannel {
     Dev,
     Rc,
