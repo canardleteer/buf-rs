@@ -96,16 +96,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let layout_mode = layout_mode(cfg.layout_mode.as_deref())?;
     log_layout_mode(&layout_mode, cfg.layout_mode.as_deref(), &mut info_warn);
     let cargo_target_dir = env::var_os("CARGO_TARGET_DIR").map(PathBuf::from);
-    let target_layout_root = if matches!(layout_mode, LayoutMode::Cache) {
-        None
-    } else {
-        Some(build_support::layout::resolve_target_layout_root(
-            &out_dir,
-            cargo_target_dir.as_deref(),
-            &core,
-            &target_triple,
-        )?)
-    };
+    let target_layout_root = build_support::layout::maybe_resolve_target_layout_root(
+        cfg.layout_mode.as_deref(),
+        &out_dir,
+        cargo_target_dir.as_deref(),
+        &core,
+        &target_triple,
+    )?;
     let mode_cache_root = match layout_mode {
         LayoutMode::Target => target_layout_root
             .as_ref()
