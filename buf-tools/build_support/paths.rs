@@ -170,6 +170,22 @@ mod tests {
         assert_eq!(cache_dir_from(None, None, None), None);
     }
 
+    #[test]
+    fn cargo_lock_omits_dirs_and_option_ext() {
+        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let root = manifest_dir
+            .parent()
+            .filter(|p| p.join("Cargo.lock").is_file() && p.join("buf-tools").is_dir())
+            .unwrap_or(&manifest_dir);
+        let lock = std::fs::read_to_string(root.join("Cargo.lock")).expect("Cargo.lock");
+        for name in ["dirs", "dirs-sys", "option-ext"] {
+            assert!(
+                !lock.contains(&format!("name = \"{name}\"")),
+                "{name} must stay out of Cargo.lock (1.72.0-hotfix.2)"
+            );
+        }
+    }
+
     #[cfg(windows)]
     #[test]
     fn windows_localappdata_before_home() {

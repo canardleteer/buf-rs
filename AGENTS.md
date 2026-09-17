@@ -433,19 +433,22 @@ and `test` steps. Equivalent Cargo commands:
   temp cache is warm). Destination for `buf` / `protoc-gen-*` is
   `BUF_RS_TOOLCHAIN_BIN_DIR`, then `$CARGO_INSTALL_ROOT/bin`, then
   `$CARGO_HOME/bin`. `cargo install --root` is not visible to `build.rs`.
-- `buf-tools` `cargo install` layout: unit tests in `build_support/layout.rs`
-  run in normal `cargo test`; nested install smoke is
+- `buf-tools` `cargo install` layout (1.70.0-hotfix.1): unit tests in
+  `build_support/layout.rs` (`maybe_resolve_target_layout_root`) run in
+  normal `cargo test`. Nested install smoke is
   `cargo test -p buf-tools --locked --test cargo_install_layout -- --ignored`
   (CI runs this on linux-amd64 only, after workspace tests warm
   `BUF_RS_CACHE_DIR`).
-- docs.rs: `DOCS_RS=1` must stay **cache** layout with no
-  `resolve_target_layout_root` walk (same contract as the cargo-install
-  hotfix). `buf-tools` writes placeholders under `OUT_DIR/bin` and emits
-  layout `env!` values; `buf-toolchain` returns before HTTP or
-  `$CARGO_HOME/bin` writes. Workspace `cargo test` runs nested
-  `DOCS_RS=1` `cargo test --lib` / `cargo doc --no-deps` for both crates
+- docs.rs (1.72.0-hotfix.1): `DOCS_RS=1` must stay **cache** layout with
+  no `resolve_target_layout_root` walk. `buf-tools` writes placeholders
+  under `OUT_DIR/bin` and emits layout `env!` values; `buf-toolchain`
+  returns before HTTP or `$CARGO_HOME/bin` writes. Workspace `cargo test`
+  runs nested `DOCS_RS=1` rustdoc for both crates
   (`buf-tools/tests/docs_rs_build.rs`,
   `buf-toolchain/tests/docs_rs_build.rs`).
+- No `dirs` / `option-ext` (1.72.0-hotfix.2): `build_support/paths.rs`
+  unit tests reject those names in `Cargo.lock`. `cargo deny check
+  licenses` also rejects MPL-2.0.
 - `buf-toolchain` `[[bin]]`: Cargo only `cargo install`s crates that expose a
   binary (or installable example). The installed binary is
   `validate-cargo-buf-toolchain` (package name remains `buf-toolchain`); it
