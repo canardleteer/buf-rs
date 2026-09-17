@@ -10,9 +10,11 @@ For work under [`xtask/`](xtask/), also read and follow
 
 - Canonical local quality command: `cargo xtask check`. `cargo xtask ci`
   is the same command. Registered steps are `fmt`, `check`, `clippy`, and
-  `test`. Keep CI, workflow, and script callers aligned with those steps
-  when the command changes. Do not make the xtask inspect a CI provider
-  declaration.
+  `test`. [`.github/workflows/rust-tests.yml`](.github/workflows/rust-tests.yml)
+  runs `cargo xtask check`, then examples via
+  [`.github/ci-scripts/run-examples.sh`](.github/ci-scripts/run-examples.sh).
+  Keep those callers aligned when the command changes. Do not make the
+  xtask inspect a CI provider declaration.
 - Also adopted: `cargo xtask coverage` and `coverage-open`.
 - Intentionally omitted: `image`, `profile` / `profile-open`, and
   `mcp-test`. See [`xtask/AGENTS.md`](xtask/AGENTS.md) for why.
@@ -44,9 +46,10 @@ Set the Buf pin locally (outside CI): after confirming
 
 1. `cargo xtask workspace set-buf-version X.Y.Z`
 2. `cargo generate-lockfile`
-3. `BUF_EXPECT_VERSION="$(cargo xtask expected-buf-version)"`
-4. `echo "Expected Buf Version: ${BUF_EXPECT_VERSION}"`
-5. `cargo test --workspace --locked`
+3. `cargo xtask check`
+
+`cargo xtask check` injects `BUF_EXPECT_VERSION` from
+`cargo xtask expected-buf-version` when you have not already set it.
 
 Read the current core with `cargo xtask expected-buf-version` (from
 `[workspace.package].version` in the root `Cargo.toml`, same `X.Y.Z` as tests
@@ -244,9 +247,8 @@ This is for maintainers changing which upstream Buf release the workspace pins
 which only rewrites the manifest on CI runners for `dev` / `rc` / `hotfix`
 channels using `-dev.*` / `-rc.*` / `-hotfix.*` crate suffixes.
 
-After running it: `cargo generate-lockfile`, then set `BUF_EXPECT_VERSION` from
-`cargo xtask expected-buf-version` and run `cargo test --workspace --locked`
-(see the numbered list under **Two different “versions”**).
+After running it: `cargo generate-lockfile`, then `cargo xtask check` (see
+the numbered list under **Two different “versions”**).
 
 ### GitHub settings (before upload works)
 
@@ -489,9 +491,7 @@ When the crate's own pinned Buf version moves (e.g. `1.40.0` → `1.41.0`):
   together).
 - Run `cargo generate-lockfile` so [`Cargo.lock`](Cargo.lock) reflects the new
   version.
-- Confirm tests with
-  `BUF_EXPECT_VERSION="$(cargo xtask expected-buf-version)"` (and
-  `echo "Expected Buf Version: ${BUF_EXPECT_VERSION}"` if you want a clear log
-  line) are still green.
+- Confirm the pin with `cargo xtask check` (`check` injects
+  `BUF_EXPECT_VERSION` from `cargo xtask expected-buf-version` when unset).
 - Optionally refresh example-only version mentions in [`README.md`](README.md) /
   this file so they stay helpful; they are not the source of truth.

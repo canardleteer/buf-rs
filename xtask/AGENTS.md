@@ -22,8 +22,12 @@ member. [`.cargo/config.toml`](../.cargo/config.toml) maps `cargo xtask` to
   inject the workspace Buf core into the child Cargo command. When the
   caller already set it, the child inherits that value.
 - Keep CI, workflow, and script callers aligned with `check` when its
-  registered steps or flags change. The xtask must remain
-  provider-agnostic and must not inspect those declarations itself.
+  registered steps or flags change.
+  [`.github/workflows/rust-tests.yml`](../.github/workflows/rust-tests.yml)
+  runs `cargo xtask check`, then
+  [`.github/ci-scripts/run-examples.sh`](../.github/ci-scripts/run-examples.sh)
+  for examples only. The xtask must remain provider-agnostic and must not
+  inspect those declarations itself.
 - `coverage` supports `llvm-cov` (default) and `tarpaulin`. Reports are
   `target/coverage/llvm-cov/html/index.html` and
   `target/coverage/tarpaulin/tarpaulin-report.html`. Both `coverage --open`
@@ -88,12 +92,10 @@ and both `build.rs` files together if the Buf-resolution rule changes.
 Run from the repository root:
 
 ```text
-cargo fmt --all -- --check
-cargo clippy --workspace --locked --all-targets
-cargo test --workspace --locked
 cargo xtask check --only fmt,check
 cargo xtask expected-buf-version
 ```
 
-Coverage depends on a selected local engine and should be exercised when
-its implementation changes.
+`cargo xtask check` is the default local quality loop. Coverage depends
+on a selected local engine and should be exercised when its
+implementation changes.

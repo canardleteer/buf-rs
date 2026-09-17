@@ -174,10 +174,11 @@ Change the pin (maintainers, outside CI): confirm the release exists on
 ```bash
 cargo xtask workspace set-buf-version X.Y.Z
 cargo generate-lockfile
-BUF_EXPECT_VERSION="$(cargo xtask expected-buf-version)"
-echo "Expected Buf Version: ${BUF_EXPECT_VERSION}"
-cargo test --workspace --locked
+cargo xtask check
 ```
+
+`cargo xtask check` injects `BUF_EXPECT_VERSION` from
+`cargo xtask expected-buf-version` when you have not already set it.
 
 [buf-releases]: https://github.com/bufbuild/buf/releases
 
@@ -268,6 +269,16 @@ cargo xtask check
 `cargo xtask ci` is the same command. `cargo xtask check --only fmt,test`
 narrows the set. When `BUF_EXPECT_VERSION` is unset, `check` injects the
 workspace Buf core into the test step.
+
+`cargo xtask coverage` (default `llvm-cov`) writes
+`target/coverage/llvm-cov/html/index.html`. `coverage --open` and
+`coverage-open` generate a fresh report first.
+
+After the quality loop, run the examples the same way CI does:
+
+```bash
+bash .github/ci-scripts/run-examples.sh
+```
 
 Equivalent Cargo-only test run:
 
