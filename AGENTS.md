@@ -385,10 +385,12 @@ Cover at least:
   `cache-link`, `cache-verified-link`, and `target`; with
   `BUF_RS_BUILD_LOG=verbose`; and after a prewarm with
   `CARGO_NET_OFFLINE=1`.
-- `buf-toolchain` install: default features (helper binary); with
-  `--no-default-features` (Cargo skips the helper and still runs
-  `build.rs`); `buf-toolchain@<semver>` syntax; isolated
-  `CARGO_HOME`; `CARGO_INSTALL_ROOT`; `BUF_RS_TOOLCHAIN_BIN_DIR`; and
+- `buf-toolchain` install: default features (helper binary). A featureless
+  `cargo install buf-toolchain` / `buf-toolchain@<semver>` must not print
+  `warning: none of the package's binaries are available for install using
+  the selected features`. Also cover `--no-default-features` (Cargo skips
+  the helper and still runs `build.rs`); isolated `$CARGO_HOME`,
+  `CARGO_INSTALL_ROOT`, and `BUF_RS_TOOLCHAIN_BIN_DIR`; and
   `[build-dependencies]`. `buf` / `protoc-gen-*` follow that
   destination order, not `cargo install --root`.
 - `validate-cargo-buf-toolchain` human text, `--yaml`, and
@@ -462,10 +464,15 @@ and `test` steps. Equivalent Cargo commands:
 - No `dirs` / `option-ext` (1.72.0-hotfix.2): `build_support/paths.rs`
   unit tests reject those names in `Cargo.lock`. `cargo deny check
   licenses` also rejects MPL-2.0.
-- `buf-toolchain` `[[bin]]`: Cargo only `cargo install`s crates that expose a
-  binary (or installable example). Default feature `validate-cli` selects
-  that binary so `cargo install buf-toolchain` does not warn that none are
-  available. The installed binary is
+- `buf-toolchain` `[[bin]]` / default `cargo install` (no feature flags):
+  Cargo only `cargo install`s crates that expose a binary (or installable
+  example). Default feature `validate-cli` must keep selecting that binary.
+  A featureless `cargo install buf-toolchain` must not print `warning: none
+  of the package's binaries are available for install using the selected
+  features`. Nested lock:
+  `cargo test -p buf-toolchain --locked --test cargo_install_default --
+  --ignored` (CI runs this on linux-amd64 only, after workspace tests warm
+  `BUF_RS_CACHE_DIR`). The installed binary is
   `validate-cargo-buf-toolchain` (package name remains `buf-toolchain`); it
   re-verifies `sha256.txt` / minisign against GitHub for the installed Buf
   core, optionally compares `releases/latest`, and probes crates.io for

@@ -99,6 +99,12 @@ validate-cargo-buf-toolchain
 validate-cargo-buf-toolchain --yaml
 ```
 
+A default `cargo install buf-toolchain` (no `--features` and no
+`--no-default-features`) must select `validate-cargo-buf-toolchain`. Cargo
+must not print `warning: none of the package's binaries are available for
+install using the selected features`. Pass `--no-default-features` only when
+you want `build.rs` without the helper.
+
 `validate-cargo-buf-toolchain` re-checks installed binaries against the pinned
 GitHub release, optionally compares `releases/latest`, and can query crates.io
 unless `BUF_RS_VALIDATE_OFFLINE=1`. `--yaml` writes one machine-readable
