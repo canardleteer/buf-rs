@@ -90,7 +90,7 @@ dependencies = [
 
 [[package]]
 name = "buf-toolchain"
-version = "1.72.0"
+version = "1.73.0"
 dependencies = [
  "flate2",
  "hex",
@@ -107,7 +107,7 @@ dependencies = [
 
 [[package]]
 name = "buf-tools"
-version = "1.72.0"
+version = "1.73.0"
 dependencies = [
  "flate2",
  "hex",
@@ -122,7 +122,7 @@ dependencies = [
 
 [[package]]
 name = "buf-tools-examples"
-version = "1.72.0"
+version = "1.73.0"
 dependencies = [
  "buf-tools",
  "protoc-bin-vendored",
