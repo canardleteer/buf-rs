@@ -217,12 +217,17 @@ See [`.github/workflows/publish-crates.yml`](.github/workflows/publish-crates.ym
   `slim-bookworm` mapping and Alpine `alpine` mapping via
   `RUST_DOCKER_TAG`) from the same staged context and runs the same
   `entrypoint.sh` on each: `cargo add buf-tools`, `cargo install
-  buf-toolchain`, `validate-cargo-buf-toolchain --yaml`, `buf --version`
-  vs crate semver core, `buf build`, then both examples. Failure fails
-  the workflow. `verify` exposes `publish_version` for
-  `TEST_CRATE_VERSION`. Skipped when `upload` is skipped (no token).
+  buf-toolchain --features validate-cli`,
+  `validate-cargo-buf-toolchain --yaml`, `buf --version` vs crate semver
+  core, `buf build`, then both examples. Failure fails the workflow.
+  `verify` exposes `publish_version` for `TEST_CRATE_VERSION`. Skipped
+  when `upload` is skipped (no token). Registry Dockerfiles must build
+  when `path-src/` is absent: `crates-io-publish` often dispatches the
+  workflow file from `main` while `inputs.ref` checks out a PR.
   Local path-preinstall (no published crate): `cargo xtask image all`.
-  Local registry smoke: `run-integration-docker.sh`.
+  Local registry smoke: `run-integration-docker.sh`. After any `dev` /
+  `rc` / `hotfix` upload from a PR, ask the user to run the local
+  consume/install matrix below.
 - Artifacts: Each job uploads `Cargo.toml`, `buf-tools/Cargo.toml`, and
   `buf-toolchain/Cargo.toml` for debugging (requires `permissions.actions:
   write` on the workflow).
@@ -353,6 +358,49 @@ to the `Dockerfile`, and adjust
 `COPY` lists if paths change. Local smoke:
 [`.github/ci-scripts/run-integration-docker.sh`](.github/ci-scripts/run-integration-docker.sh)
 (same staging as CI).
+
+### Local consume/install matrix after a crates.io publish
+
+Post-publish Docker is a registry smoke, not a substitute for consumer
+install paths. `crates-io-publish` may require dispatching
+`publish-crates.yml` from `main` with `inputs.ref` set to the PR branch,
+so that job can run an older staging recipe against a newer Dockerfile.
+
+When you cut a `dev`, `rc`, or `hotfix` publish from a PR, ask the user
+to exercise the published versions locally (or do it if they already
+asked). Isolate Cargo so you do not overwrite the developer
+`$CARGO_HOME/bin`: use a dedicated `CARGO_HOME` and/or `cargo install
+--root`. Share one `BUF_RS_CACHE_DIR` across cases.
+
+Cover at least:
+
+- `buf-tools` as `[dependencies]`, as `[build-dependencies]`, and via
+  `cargo add` at the published semver. Run `buf --version` (core must
+  match) and `buf lint` on the examples proto.
+- Consumer `cargo install` of a crate that lists `buf-tools` under
+  `[build-dependencies]` (the layout that used to walk `OUT_DIR` for a
+  project `target/`). Repeat with `BUF_RS_LAYOUT_MODE` of `cache`,
+  `cache-link`, `cache-verified-link`, and `target`; with
+  `BUF_RS_BUILD_LOG=verbose`; and after a prewarm with
+  `CARGO_NET_OFFLINE=1`.
+- `buf-toolchain` install: without `--features validate-cli` (Cargo
+  skips the helper and still runs `build.rs`); with
+  `--features validate-cli`; `buf-toolchain@<semver>` syntax; isolated
+  `CARGO_HOME`; `BUF_RS_TOOLCHAIN_BIN_DIR`; and
+  `[build-dependencies]`. `cargo install --root` does not receive
+  `buf` / `protoc-gen-*`. Those land in `$CARGO_HOME/bin` or
+  `BUF_RS_TOOLCHAIN_BIN_DIR`.
+- `validate-cargo-buf-toolchain` human text, `--yaml`, and
+  `BUF_RS_VALIDATE_OFFLINE=1 --yaml`.
+- Registry Docker: `TEST_CRATE_VERSION=<published>` and
+  [`.github/ci-scripts/run-integration-docker.sh`](.github/ci-scripts/run-integration-docker.sh).
+
+If a path fails, replay that path against the previous published
+pre-release of the same Buf core (for example the last `-rc.N`) to
+see whether the failure is new.
+
+Do not record machine-specific cache or home directories in this file
+or in PR text.
 
 ## Linting
 

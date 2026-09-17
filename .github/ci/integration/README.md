@@ -14,9 +14,10 @@ Do not hardcode `FROM rust:…`. Both files take `ARG RUST_DOCKER_TAG` and
 Manual publish ([`.github/workflows/publish-crates.yml`](../../workflows/publish-crates.yml))
 runs **`post-publish-integration`** after **`upload`**: it builds **both**
 images from a **minimal context** (no workspace root `Cargo.toml`, no `path`
-deps except an empty `path-src/` so `COPY` succeeds) and runs
-**`entrypoint.sh`** with **`TEST_CRATE_VERSION`** set to the published
-crates.io semver.
+deps) and runs **`entrypoint.sh`** with **`TEST_CRATE_VERSION`** set to the
+published crates.io semver. Dockerfiles must not `COPY path-src`: a
+`dev` publish often uses the workflow file from `main` and checks out
+the PR, so staging may omit that directory.
 
 ## Isolation (registry mode)
 
@@ -48,7 +49,7 @@ and `cargo xtask image`:
 | `Cargo.toml`, `Dockerfile`, `Dockerfile.alpine`, `entrypoint.sh` | This directory |
 | `buf_lint.rs`, `protoc_with_buf_plugins.rs` | [`examples/`](../../../examples/) |
 | `proto/**` | [`examples/proto/`](../../../examples/proto/) |
-| `path-src/` | Empty in registry mode; workspace members in `cargo xtask image` |
+| `path-src/` | Optional. Registry builds ignore it. `cargo xtask image` bind-mounts the workspace members at build and at run. |
 
 ## Docker base image (`RUST_DOCKER_TAG`)
 

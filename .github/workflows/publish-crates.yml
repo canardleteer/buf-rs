@@ -56,6 +56,11 @@
 # `xtask/src/publish_inputs.rs` validates channel-specific rules (rc/hotfix: positive decimal, no
 # leading zeros).
 #
+# Post-publish Docker: stage via
+# `.github/ci-scripts/stage-integration-docker-context.sh` after checkout of
+# `inputs.ref`. Registry Dockerfiles must build when `path-src/` is missing:
+# `crates-io-publish` often dispatches this workflow file from `main`.
+#
 # =============================================================================
 name: publish-crates
 
@@ -441,18 +446,7 @@ jobs:
         run: |
           set -euo pipefail
           CTX="${RUNNER_TEMP}/integration-context"
-          rm -rf "${CTX}"
-          mkdir -p "${CTX}/proto" "${CTX}/path-src"
-          cp rust-toolchain.toml "${CTX}/"
-          cp .github/ci/integration/Cargo.toml \
-            .github/ci/integration/Dockerfile \
-            .github/ci/integration/Dockerfile.alpine \
-            .github/ci/integration/entrypoint.sh \
-            "${CTX}/"
-          chmod +x "${CTX}/entrypoint.sh"
-          cp examples/buf_lint.rs examples/protoc_with_buf_plugins.rs "${CTX}/"
-          cp -r examples/proto/* "${CTX}/proto/"
-          : >"${CTX}/path-src/.keep"
+          bash .github/ci-scripts/stage-integration-docker-context.sh "${CTX}"
           echo "context=${CTX}" >> "${GITHUB_OUTPUT}"
 
       - name: Rust Docker tags from rust-toolchain.toml
@@ -479,7 +473,6 @@ jobs:
           tags: buf-rs-integration:debian
           build-args: |
             RUST_DOCKER_TAG=${{ steps.rust_docker_tag.outputs.debian }}
-            INSTALL_MODE=registry
           cache-from: type=gha,scope=integration-debian
           cache-to: type=gha,mode=max,scope=integration-debian
 
@@ -494,7 +487,6 @@ jobs:
           tags: buf-rs-integration:alpine
           build-args: |
             RUST_DOCKER_TAG=${{ steps.rust_docker_tag.outputs.alpine }}
-            INSTALL_MODE=registry
           cache-from: type=gha,scope=integration-alpine
           cache-to: type=gha,mode=max,scope=integration-alpine
 
