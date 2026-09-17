@@ -6,7 +6,8 @@
 
 [graph]
 # Match what `cargo metadata` sees for this workspace (including examples/xtask).
-all-features = false
+# Include optional bin features (e.g. buf-toolchain validate-cli / noyalib).
+all-features = true
 # Hosts for license/source checks: union of rustc triples implied by
 # Cargo.toml, buf-tools/Cargo.toml, and buf-toolchain/Cargo.toml (today:
 # rust_triples under [package.metadata.buf-tools.targets]). Not the CI

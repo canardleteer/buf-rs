@@ -75,7 +75,7 @@ installs `buf` and `protoc-gen-buf-*` with plain names (`*.exe` on Windows). By
 default those binaries go to `$CARGO_HOME/bin` (atomic install). `cargo install`
 also installs `validate-cargo-buf-toolchain`. Run it after install for local
 checks plus GitHub / crates.io checks, or set `BUF_RS_VALIDATE_OFFLINE=1` to skip
-network I/O.
+network I/O. Pass `--yaml` for a machine-readable triage report.
 
 Alternatively, add `buf-toolchain` under `[build-dependencies]` so `cargo build`
 runs the same `build.rs` without `cargo install`:
