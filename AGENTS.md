@@ -393,6 +393,19 @@ Cover at least:
   destination order, not `cargo install --root`.
 - `validate-cargo-buf-toolchain` human text, `--yaml`, and
   `BUF_RS_VALIDATE_OFFLINE=1 --yaml`.
+- crates.io README for `buf-tools` and `buf-toolchain` at the
+  published semver. Fetch the crate page or
+  `https://crates.io/api/v1/crates/<name>/<semver>/readme` (send a
+  `User-Agent`). The body must be that crate's `README.md`, not the
+  workspace root README: the heading matches the crate name, **Crate
+  version tracks Buf** is present, and the crates.io, docs.rs, and
+  GitHub publish-channel links resolve. Fail if the readme is empty.
+- docs.rs for both crates at that semver. Poll
+  `https://docs.rs/<crate>/<semver>/` until rustdoc is up (not queued
+  or failed). Pre-releases are built. `buf-tools` rustdoc must expose
+  `buf_bin_path` and the layout helpers. `buf-toolchain` rustdoc must
+  expose `VERSION` and the `DOCS_RS=1` no-install path. Crate-level
+  rustdoc must not contradict the published README.
 - Registry Docker: `TEST_CRATE_VERSION=<published>` and
   [`.github/ci-scripts/run-integration-docker.sh`](.github/ci-scripts/run-integration-docker.sh).
 
