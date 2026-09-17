@@ -156,9 +156,7 @@ pub fn run_workspace(root: &Path, cmd: WorkspaceCmd) -> Result<()> {
                 path.display()
             );
             eprintln!("xtask: then:");
-            eprintln!("  BUF_EXPECT_VERSION=\"$(cargo xtask expected-buf-version)\"");
-            eprintln!("  echo \"Expected Buf Version: ${{BUF_EXPECT_VERSION}}\"");
-            eprintln!("  cargo test --workspace --locked");
+            eprintln!("  cargo xtask check");
         }
     }
     Ok(())

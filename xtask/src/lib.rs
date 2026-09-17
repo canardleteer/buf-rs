@@ -1,4 +1,8 @@
 //! Repository development and maintainer tasks.
+//!
+//! `check` (`ci`) runs `fmt`, `check`, `clippy`, and `test`. `coverage` and
+//! `coverage-open` write engine-specific HTML reports. Publish and Buf-pin
+//! commands stay on this CLI.
 
 mod check;
 mod coverage;
