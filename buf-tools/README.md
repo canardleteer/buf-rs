@@ -96,7 +96,7 @@ Environment variables are read when `buf-tools` compiles and override
 
 | Symptom | What to try |
 |--------|-------------|
-| `could not locate Cargo target dir from OUT_DIR` on a `buf-tools` release from before the layout fix | Upgrade `buf-tools` to a release containing the fix. No env var bypasses the unconditional target walk in those versions. Alternatives: use [`buf-toolchain`](../buf-toolchain/README.md) as a build dependency instead, or `cargo install buf-toolchain --features validate-cli` if you only need the CLI. |
+| `could not locate Cargo target dir from OUT_DIR` on a `buf-tools` release from before the layout fix | Upgrade `buf-tools` to a release containing the fix. No env var bypasses the unconditional target walk in those versions. Alternatives: use [`buf-toolchain`](../buf-toolchain/README.md) as a build dependency instead, or `cargo install buf-toolchain` if you only need the CLI. |
 | `cargo install` fails with non-default `layout_mode` in workspace metadata | `BUF_RS_LAYOUT_MODE=cache cargo install …` |
 | Need a stable writable layout root for non-cache modes | `CARGO_TARGET_DIR=/path/to/writable/dir cargo install …` |
 | Network flake or air-gapped retry | Prewarm with `BUF_RS_CACHE_DIR=… cargo build` (any crate using `buf-tools`), then `BUF_RS_CACHE_DIR=… CARGO_NET_OFFLINE=1 cargo install …` |

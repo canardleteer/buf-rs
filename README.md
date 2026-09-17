@@ -64,7 +64,7 @@ let _ = Command::new(buf).arg("--version").status();
 Primary workflow:
 
 ```bash
-cargo install buf-toolchain --features validate-cli
+cargo install buf-toolchain
 ```
 
 The `build.rs` shares `buf-tools`’ `build_support` (verify, lock, targets) and
@@ -80,6 +80,7 @@ runs the same `build.rs` without `cargo install`:
 ```toml
 [build-dependencies]
 # Example only: match root [workspace.package].version or your pin.
+# Set default-features = false if you only need VERSION and the installer.
 buf-toolchain = "1.40.0"
 ```
 
@@ -322,8 +323,8 @@ stages [`rust-toolchain.toml`](rust-toolchain.toml), the integration
 manifest under [`.github/ci/integration/`](.github/ci/integration/), and
 mirrored [`examples/`](examples/) sources. It builds the Debian and Alpine
 images and runs the entrypoint (`cargo add buf-tools`, `cargo install
-buf-toolchain --features validate-cli`, `buf --version` vs crate semver
-core, `buf build` for the example baseline, both examples).
+buf-toolchain`, `buf --version` vs crate semver core, `buf build` for
+the example baseline, both examples).
 
 `TEST_CRATE_VERSION` must be a published semver (whatever you shipped),
 not only the value in `Cargo.toml`:

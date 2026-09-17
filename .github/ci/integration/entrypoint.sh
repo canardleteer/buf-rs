@@ -9,7 +9,7 @@ export PATH="/usr/local/bin:/usr/local/cargo/bin:${HOME}/.cargo/bin:${PATH}"
 if [[ -n "${TEST_CRATE_VERSION:-}" ]]; then
     echo "Integration test using TEST_CRATE_VERSION=${TEST_CRATE_VERSION}"
     cargo add "buf-tools@=${TEST_CRATE_VERSION}"
-    cargo install buf-toolchain --version "${TEST_CRATE_VERSION}" --features validate-cli
+    cargo install buf-toolchain --version "${TEST_CRATE_VERSION}"
     if [[ "${TEST_CRATE_VERSION}" =~ ^([0-9]+\.[0-9]+\.[0-9]+) ]]; then
         EXPECT_CORE="${BASH_REMATCH[1]}"
     else
@@ -20,7 +20,7 @@ elif [[ -n "${EXPECT_BUF_CORE:-}" && -d /opt/path-src/buf-tools ]]; then
     echo "Integration test using path-preinstalled buf-toolchain; EXPECT_BUF_CORE=${EXPECT_BUF_CORE}"
     # cargo install --root is not visible to build.rs; CARGO_INSTALL_ROOT is.
     CARGO_INSTALL_ROOT=/usr/local cargo install --locked --root /usr/local \
-        --features validate-cli --path /opt/path-src/buf-toolchain
+        --path /opt/path-src/buf-toolchain
     cargo add --path /opt/path-src/buf-tools
     EXPECT_CORE="${EXPECT_BUF_CORE}"
 else
