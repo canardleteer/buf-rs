@@ -1,11 +1,13 @@
 //! Repository development and maintainer tasks.
 //!
 //! `check` (`ci`) runs `fmt`, `check`, `clippy`, and `test`. `coverage` and
-//! `coverage-open` write engine-specific HTML reports. Publish and Buf-pin
-//! commands stay on this CLI.
+//! `coverage-open` write engine-specific HTML reports. `image` builds local
+//! Debian and Alpine integration images. Publish and Buf-pin commands stay
+//! on this CLI.
 
 mod check;
 mod coverage;
+mod image;
 mod policy;
 mod process;
 mod publish;
@@ -42,6 +44,8 @@ enum Task {
     Coverage(CoverageArgs),
     /// Generate a fresh coverage report and open it.
     CoverageOpen(CoverageSelection),
+    /// Build and smoke-test repository-owned integration images without pushing.
+    Image(ImageArgs),
     /// Print the `X.Y.Z` core used for `BUF_EXPECT_VERSION` in tests.
     ///
     /// Read from the **root workspace** `Cargo.toml`: `[workspace.package].version`, taking only
@@ -161,6 +165,60 @@ struct CoverageArgs {
     open: bool,
 }
 
+/// Supported local OCI image engines.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, ValueEnum)]
+pub enum ImageEngine {
+    #[default]
+    Auto,
+    Docker,
+    Buildah,
+}
+
+#[derive(Debug, Args)]
+struct ImageArgs {
+    /// OCI image engine shared by the selected image workflow.
+    #[arg(long, value_enum, default_value_t, global = true)]
+    engine: ImageEngine,
+    /// Repository-owned image target.
+    #[command(subcommand)]
+    target: ImageTarget,
+}
+
+/// Repository-owned integration image targets.
+#[derive(Debug, Subcommand)]
+enum ImageTarget {
+    /// Debian slim (`rust:${RUST_DOCKER_TAG}` with slim-bookworm mapping).
+    Debian(DebianImageArgs),
+    /// Alpine (`rust:${RUST_DOCKER_TAG}` with alpine mapping).
+    Alpine(AlpineImageArgs),
+    /// Build and smoke-test both owned images.
+    All(AllImageArgs),
+}
+
+#[derive(Debug, Args)]
+struct DebianImageArgs {
+    /// Local image tag.
+    #[arg(long, default_value = policy::IMAGE_DEBIAN_TAG)]
+    tag: String,
+}
+
+#[derive(Debug, Args)]
+struct AlpineImageArgs {
+    /// Local image tag.
+    #[arg(long, default_value = policy::IMAGE_ALPINE_TAG)]
+    tag: String,
+}
+
+#[derive(Debug, Args)]
+struct AllImageArgs {
+    /// Local Debian image tag.
+    #[arg(long, default_value = policy::IMAGE_DEBIAN_TAG)]
+    debian_tag: String,
+    /// Local Alpine image tag.
+    #[arg(long, default_value = policy::IMAGE_ALPINE_TAG)]
+    alpine_tag: String,
+}
+
 /// Dispatch a parsed repository task.
 pub fn run(cli: Cli) -> Result<()> {
     let root = workspace_root();
@@ -176,6 +234,7 @@ pub fn run(cli: Cli) -> Result<()> {
             args.open,
         ),
         Task::CoverageOpen(args) => coverage::run(&root, args.engine, &args.features, true),
+        Task::Image(args) => image::run(&root, args.engine, args.target),
         Task::ExpectedBufVersion => publish::run_expected_buf_version(&root),
         Task::Publish { cmd } => publish::run_publish(&root, cmd),
         Task::Workspace { cmd } => publish::run_workspace(&root, cmd),
@@ -282,5 +341,41 @@ mod tests {
         let expected = Cli::try_parse_from(["cargo xtask", "expected-buf-version"])
             .expect("expected-buf-version should parse");
         assert!(matches!(expected.task, Task::ExpectedBufVersion));
+    }
+
+    #[test]
+    fn image_targets_and_engine_parse() {
+        let debian = Cli::try_parse_from(["cargo xtask", "image", "debian"])
+            .expect("image debian should parse");
+        let Task::Image(args) = debian.task else {
+            panic!("expected image");
+        };
+        assert!(matches!(args.target, ImageTarget::Debian(_)));
+        assert_eq!(args.engine, ImageEngine::Auto);
+
+        let alpine = Cli::try_parse_from([
+            "cargo xtask",
+            "image",
+            "--engine",
+            "docker",
+            "alpine",
+            "--tag",
+            "buf-rs-integration:alpine-test",
+        ])
+        .expect("image alpine should parse");
+        let Task::Image(args) = alpine.task else {
+            panic!("expected image");
+        };
+        assert_eq!(args.engine, ImageEngine::Docker);
+        match args.target {
+            ImageTarget::Alpine(t) => assert_eq!(t.tag, "buf-rs-integration:alpine-test"),
+            other => panic!("expected alpine, got {other:?}"),
+        }
+
+        let all = Cli::try_parse_from(["cargo xtask", "image", "all"]).expect("image all");
+        let Task::Image(args) = all.task else {
+            panic!("expected image");
+        };
+        assert!(matches!(args.target, ImageTarget::All(_)));
     }
 }

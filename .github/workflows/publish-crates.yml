@@ -442,42 +442,69 @@ jobs:
           set -euo pipefail
           CTX="${RUNNER_TEMP}/integration-context"
           rm -rf "${CTX}"
-          mkdir -p "${CTX}/proto"
+          mkdir -p "${CTX}/proto" "${CTX}/path-src"
           cp rust-toolchain.toml "${CTX}/"
           cp .github/ci/integration/Cargo.toml \
             .github/ci/integration/Dockerfile \
+            .github/ci/integration/Dockerfile.alpine \
             .github/ci/integration/entrypoint.sh \
             "${CTX}/"
           chmod +x "${CTX}/entrypoint.sh"
           cp examples/buf_lint.rs examples/protoc_with_buf_plugins.rs "${CTX}/"
           cp -r examples/proto/* "${CTX}/proto/"
+          : >"${CTX}/path-src/.keep"
           echo "context=${CTX}" >> "${GITHUB_OUTPUT}"
 
-      - name: Rust Docker tag from rust-toolchain.toml
+      - name: Rust Docker tags from rust-toolchain.toml
         id: rust_docker_tag
         run: |
           set -euo pipefail
-          TAG="$(bash .github/ci-scripts/rust-docker-tag-from-toolchain.sh rust-toolchain.toml)"
-          echo "tag=${TAG}" >> "${GITHUB_OUTPUT}"
+          DEBIAN="$(bash .github/ci-scripts/rust-docker-tag-from-toolchain.sh rust-toolchain.toml debian)"
+          ALPINE="$(bash .github/ci-scripts/rust-docker-tag-from-toolchain.sh rust-toolchain.toml alpine)"
+          echo "debian=${DEBIAN}" >> "${GITHUB_OUTPUT}"
+          echo "alpine=${ALPINE}" >> "${GITHUB_OUTPUT}"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4.4.1
 
       # Image only: OS + Rust base, rust-toolchain.toml, cargo fetch (protoc-bin-vendored). No crates.io buf-tools yet.
-      - name: Build integration Docker image
+      - name: Build Debian integration image
         uses: docker/build-push-action@v7.4.0
         with:
           context: ${{ steps.stage.outputs.context }}
+          file: ${{ steps.stage.outputs.context }}/Dockerfile
           push: false
           load: true
           pull: true
-          tags: buf-rs-integration:ci
-          build-args: RUST_DOCKER_TAG=${{ steps.rust_docker_tag.outputs.tag }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          tags: buf-rs-integration:debian
+          build-args: |
+            RUST_DOCKER_TAG=${{ steps.rust_docker_tag.outputs.debian }}
+            INSTALL_MODE=registry
+          cache-from: type=gha,scope=integration-debian
+          cache-to: type=gha,mode=max,scope=integration-debian
 
-      # ENTRYPOINT runs entrypoint.sh: cargo add/install at TEST_CRATE_VERSION, buf --version, buf build, both examples.
-      - name: Integration test (registry consumer smoke)
+      - name: Build Alpine integration image
+        uses: docker/build-push-action@v7.4.0
+        with:
+          context: ${{ steps.stage.outputs.context }}
+          file: ${{ steps.stage.outputs.context }}/Dockerfile.alpine
+          push: false
+          load: true
+          pull: true
+          tags: buf-rs-integration:alpine
+          build-args: |
+            RUST_DOCKER_TAG=${{ steps.rust_docker_tag.outputs.alpine }}
+            INSTALL_MODE=registry
+          cache-from: type=gha,scope=integration-alpine
+          cache-to: type=gha,mode=max,scope=integration-alpine
+
+      # ENTRYPOINT: cargo add/install at TEST_CRATE_VERSION, validate --yaml, buf --version, buf build, both examples.
+      - name: Integration test (Debian registry consumer)
         run: |
           set -euo pipefail
-          docker run --rm -e "TEST_CRATE_VERSION=${TEST_CRATE_VERSION}" buf-rs-integration:ci
+          docker run --rm -e "TEST_CRATE_VERSION=${TEST_CRATE_VERSION}" buf-rs-integration:debian
+
+      - name: Integration test (Alpine registry consumer)
+        run: |
+          set -euo pipefail
+          docker run --rm -e "TEST_CRATE_VERSION=${TEST_CRATE_VERSION}" buf-rs-integration:alpine

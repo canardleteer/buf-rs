@@ -35,7 +35,12 @@ fn main() -> ExitCode {
     let report = collect_report();
     if cli.yaml {
         match noyalib::to_string(&report) {
-            Ok(yaml) => print!("{yaml}"),
+            Ok(yaml) => {
+                print!("{yaml}");
+                if !yaml.ends_with('\n') {
+                    println!();
+                }
+            }
             Err(e) => {
                 eprintln!("failed to serialize YAML report: {e}");
                 return ExitCode::from(1);

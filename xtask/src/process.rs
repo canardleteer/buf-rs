@@ -82,6 +82,29 @@ pub fn require(root: &Path, label: &str, spec: &CommandSpec, guidance: &str) -> 
     probe(root, label, spec, guidance).map_err(anyhow::Error::msg)
 }
 
+pub fn output(root: &Path, spec: &CommandSpec) -> Result<String> {
+    let mut command = Command::new(&spec.program);
+    command.args(&spec.args).current_dir(root);
+    for (key, value) in &spec.env {
+        command.env(key, value);
+    }
+    let output = command
+        .output()
+        .with_context(|| format!("starting {}", display(spec)))?;
+    ensure!(
+        output.status.success(),
+        "{} failed with {}: {}",
+        display(spec),
+        output.status,
+        concise_output(&output.stdout, &output.stderr)
+    );
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+pub fn best_effort(root: &Path, spec: &CommandSpec) {
+    let _ = run(root, spec);
+}
+
 fn display(spec: &CommandSpec) -> String {
     std::iter::once(spec.program.as_os_str())
         .chain(spec.args.iter().map(OsString::as_os_str))

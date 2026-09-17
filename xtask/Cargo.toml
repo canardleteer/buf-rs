@@ -1,6 +1,6 @@
 [package]
 name = "xtask"
-description = "Workspace development and maintainer tasks (check, coverage, publish helpers, Buf pin)."
+description = "Workspace development and maintainer tasks (check, coverage, image, publish helpers, Buf pin)."
 version = "0.1.0"
 edition = "2024"
 license.workspace = true

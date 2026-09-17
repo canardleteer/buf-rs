@@ -32,6 +32,13 @@ member. [`.cargo/config.toml`](../.cargo/config.toml) maps `cargo xtask` to
   `target/coverage/llvm-cov/html/index.html` and
   `target/coverage/tarpaulin/tarpaulin-report.html`. Both `coverage --open`
   and `coverage-open` generate a fresh report first.
+- `image` builds the sibling Debian and Alpine integration images
+  (`debian`, `alpine`, `all`) with `auto|docker|buildah`. It path-preinstalls
+  `buf-toolchain` from this worktree and runs the shared
+  [`entrypoint.sh`](../.github/ci/integration/entrypoint.sh) **with
+  network** (Buf download at build; validator + examples at run). Do not
+  pass `--network none`. Keep `image` off `check` / `ci`. Default tags:
+  `buf-rs-integration:debian` and `buf-rs-integration:alpine`. Never push.
 - Repository-specific commands stay on the same CLI: `expected-buf-version`,
   `publish resolve|apply-version|verify-summary`, and
   `workspace set-buf-version`. Keep those aligned with
@@ -40,11 +47,6 @@ member. [`.cargo/config.toml`](../.cargo/config.toml) maps `cargo xtask` to
 
 ## Omitted standard handles
 
-- `image` is omitted. The post-publish integration image lives under
-  [`.github/ci/integration/`](../.github/ci/integration/) and is driven by
-  [`.github/ci-scripts/run-integration-docker.sh`](../.github/ci-scripts/run-integration-docker.sh).
-  Its smoke test installs from crates.io and needs network. Do not replace
-  that script without user approval.
 - `profile` and `profile-open` are omitted. There is no representative
   no-network workload: published crates download and verify Buf assets,
   and examples need a generated Buf image.
@@ -61,7 +63,9 @@ member. [`.cargo/config.toml`](../.cargo/config.toml) maps `cargo xtask` to
   approval.
 - Retain the CI shell scripts under [`.github/ci-scripts/`](../.github/ci-scripts/)
   for example runs, Buf path lookup, Docker staging, and release-tag
-  helpers. Propose a migration before replacing callers.
+  helpers. [`run-integration-docker.sh`](../.github/ci-scripts/run-integration-docker.sh)
+  stays the registry-mode local/CI twin (`DISTRO=debian|alpine|all`). Propose
+  a migration before replacing callers.
 
 ## Tool guidance
 

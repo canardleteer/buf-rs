@@ -31,7 +31,7 @@ required-features = ["validate-cli"]
 
 [features]
 # Empty default: `cargo add buf-toolchain` / [build-dependencies] do not pull
-# clap or noyalib. `cargo install` enables required-features on this bin.
+# clap or noyalib. Pass `--features validate-cli` to `cargo install`.
 validate-cli = ["dep:clap", "dep:noyalib", "dep:serde"]
 
 [dependencies]
