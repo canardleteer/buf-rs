@@ -369,8 +369,9 @@ so that job can run an older staging recipe against a newer Dockerfile.
 When you cut a `dev`, `rc`, or `hotfix` publish from a PR, ask the user
 to exercise the published versions locally (or do it if they already
 asked). Isolate Cargo so you do not overwrite the developer
-`$CARGO_HOME/bin`: use a dedicated `CARGO_HOME` and/or `cargo install
---root`. Share one `BUF_RS_CACHE_DIR` across cases.
+`$CARGO_HOME/bin`: use a dedicated `CARGO_HOME`, `CARGO_INSTALL_ROOT`,
+or `BUF_RS_TOOLCHAIN_BIN_DIR`. Share one `BUF_RS_CACHE_DIR` across
+cases. `cargo install --root` is not visible to `build.rs`.
 
 Cover at least:
 
@@ -386,10 +387,9 @@ Cover at least:
 - `buf-toolchain` install: without `--features validate-cli` (Cargo
   skips the helper and still runs `build.rs`); with
   `--features validate-cli`; `buf-toolchain@<semver>` syntax; isolated
-  `CARGO_HOME`; `BUF_RS_TOOLCHAIN_BIN_DIR`; and
-  `[build-dependencies]`. `cargo install --root` does not receive
-  `buf` / `protoc-gen-*`. Those land in `$CARGO_HOME/bin` or
-  `BUF_RS_TOOLCHAIN_BIN_DIR`.
+  `CARGO_HOME`; `CARGO_INSTALL_ROOT`; `BUF_RS_TOOLCHAIN_BIN_DIR`; and
+  `[build-dependencies]`. `buf` / `protoc-gen-*` follow that
+  destination order, not `cargo install --root`.
 - `validate-cargo-buf-toolchain` human text, `--yaml`, and
   `BUF_RS_VALIDATE_OFFLINE=1 --yaml`.
 - Registry Docker: `TEST_CRATE_VERSION=<published>` and
@@ -401,7 +401,8 @@ see whether the failure is new.
 
 Do not record usernames, host home directories, or other machine-local
 paths in this file, in crate READMEs, or in PR text. Describe isolation
-with `$CARGO_HOME`, `--root`, and `BUF_RS_CACHE_DIR` only.
+with `$CARGO_HOME`, `CARGO_INSTALL_ROOT`, `BUF_RS_TOOLCHAIN_BIN_DIR`,
+and `BUF_RS_CACHE_DIR` only.
 
 ## Linting
 
@@ -428,7 +429,9 @@ and `test` steps. Equivalent Cargo commands:
   nested-install behavior in isolation. Run
   `cargo test -p buf-toolchain --locked --test managed_bin_layout -- --ignored`
   when changing installer logic (requires network unless the nested build’s
-  temp cache is warm).
+  temp cache is warm). Destination for `buf` / `protoc-gen-*` is
+  `BUF_RS_TOOLCHAIN_BIN_DIR`, then `$CARGO_INSTALL_ROOT/bin`, then
+  `$CARGO_HOME/bin`. `cargo install --root` is not visible to `build.rs`.
 - `buf-tools` `cargo install` layout: unit tests in `build_support/layout.rs`
   run in normal `cargo test`; nested install smoke is
   `cargo test -p buf-tools --locked --test cargo_install_layout -- --ignored`
