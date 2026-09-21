@@ -195,6 +195,12 @@ See [`.github/workflows/publish-crates.yml`](.github/workflows/publish-crates.ym
   `cargo xtask publish apply-version`, `cargo generate-lockfile`, then
   `cargo publish --allow-dirty --locked` (ephemeral `Cargo.toml` / `Cargo.lock`,
   not committed).
+- Crate READMEs before publish: read [`buf-tools/README.md`](buf-tools/README.md)
+  and [`buf-toolchain/README.md`](buf-toolchain/README.md) in those crate
+  directories. Each published crate shows its own `README.md` on crates.io,
+  not the workspace root README. Confirm the heading is the crate name,
+  **Crate version tracks Buf** is present, and the crates.io, docs.rs, and
+  GitHub publish-channel links resolve.
 - Stable: requires `channel=stable`, dispatch from `main`, `inputs.ref` set to
   `main`, and `confirm_stable_version` matching
   `[workspace.package].version`; no `--allow-dirty`; no in-runner ephemeral
@@ -398,16 +404,19 @@ Cover at least:
 - crates.io README for `buf-tools` and `buf-toolchain` at the
   published semver. Fetch the crate page or
   `https://crates.io/api/v1/crates/<name>/<semver>/readme` (send a
-  `User-Agent`). The body must be that crate's `README.md`, not the
-  workspace root README: the heading matches the crate name, **Crate
-  version tracks Buf** is present, and the crates.io, docs.rs, and
-  GitHub publish-channel links resolve. Fail if the readme is empty.
+  `User-Agent`). The body must be that crate's `README.md` from the
+  crate directory at the published revision, not the workspace root
+  README. The heading matches the crate name, **Crate version tracks
+  Buf** is present, and the crates.io, docs.rs, and GitHub
+  publish-channel links resolve. Fail if the readme is empty or looks
+  like the workspace README.
 - docs.rs for both crates at that semver. Poll
-  `https://docs.rs/<crate>/<semver>/` until rustdoc is up (not queued
-  or failed). Pre-releases are built. `buf-tools` rustdoc must expose
-  `buf_bin_path` and the layout helpers. `buf-toolchain` rustdoc must
-  expose `VERSION` and the `DOCS_RS=1` no-install path. Crate-level
-  rustdoc must not contradict the published README.
+  `https://docs.rs/<crate>/<semver>/` until rustdoc finishes (not
+  queued) or the build is reported as failed. Pre-releases are built.
+  The post-publish check is that documentation builds. rustdoc has
+  failed for these crates before. Do not treat missing rustdoc items
+  as a consume-matrix failure; workspace `DOCS_RS=1` tests already
+  cover the no-install path.
 - Registry Docker: `TEST_CRATE_VERSION=<published>` and
   [`.github/ci-scripts/run-integration-docker.sh`](.github/ci-scripts/run-integration-docker.sh).
 
