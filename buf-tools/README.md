@@ -100,6 +100,7 @@ Environment variables are read when `buf-tools` compiles and override
 | `cargo install` fails with non-default `layout_mode` in workspace metadata | `BUF_RS_LAYOUT_MODE=cache cargo install …` |
 | Need a stable writable layout root for non-cache modes | `CARGO_TARGET_DIR=/path/to/writable/dir cargo install …` |
 | Network flake or air-gapped retry | Prewarm with `BUF_RS_CACHE_DIR=… cargo build` (any crate using `buf-tools`), then `BUF_RS_CACHE_DIR=… CARGO_NET_OFFLINE=1 cargo install …` |
+| `timed out waiting for cache slot lock` while another build downloads | Increase `BUF_RS_CACHE_LOCK_TIMEOUT_SECS`, for example `BUF_RS_CACHE_LOCK_TIMEOUT_SECS=300 cargo install …`. See [Concurrent writers](#concurrent-writers). |
 | Diagnose resolution or downloads | `BUF_RS_BUILD_LOG=verbose cargo install …` |
 | Override download mirrors | `BUF_RS_RELEASE_BASE_URL`, `BUF_RS_SOURCE_BASE_URL` (see below) |
 
@@ -111,6 +112,7 @@ shell.
 [env]
 BUF_RS_LAYOUT_MODE = "cache"
 # BUF_RS_CACHE_DIR = "target/buf-rs-cache"
+# BUF_RS_CACHE_LOCK_TIMEOUT_SECS = "300"
 ```
 
 Contract tests need network on a cold cache. CI runs them on linux-amd64.
@@ -149,6 +151,9 @@ Supported keys are `layout_mode`, `build_log`, `cache_dir`,
 `release_base_url`, and `source_base_url`. Resolution walks built-in
 defaults, then workspace metadata, then package metadata, then the
 environment (and optional `.cargo/config.toml` `[env]`).
+
+`BUF_RS_CACHE_LOCK_TIMEOUT_SECS` is environment-only and does not have a
+metadata key. Set it in the shell or `.cargo/config.toml` `[env]`.
 
 ## Network
 
@@ -204,8 +209,35 @@ Trailing slash optional.
 ## Concurrent writers
 
 `build.rs` uses a lock file under the cache slot so parallel builds do not
-corrupt downloads. With `CARGO_NET_OFFLINE=true`, a cold cache fails fast
-instead of downloading.
+corrupt downloads. The owner holds it during downloads and verification.
+Another build waits up to 120 seconds by default. Set
+`BUF_RS_CACHE_LOCK_TIMEOUT_SECS` when building or installing your consumer
+crate to allow more time on a slow connection:
+
+```bash
+BUF_RS_CACHE_LOCK_TIMEOUT_SECS=300 cargo build
+BUF_RS_CACHE_LOCK_TIMEOUT_SECS=300 cargo install your-crate
+```
+
+The value must be a positive whole number of seconds that fits in a 64-bit
+unsigned integer. Empty, zero, negative, fractional, nonnumeric, and
+out-of-range values fail the build with an error naming the variable. An
+unset variable keeps the 120-second default. Changing it reruns `build.rs`.
+Both `buf-tools` and `buf-toolchain` honor it. To keep a project default, add
+this to `.cargo/config.toml`:
+
+```toml
+[env]
+BUF_RS_CACHE_LOCK_TIMEOUT_SECS = "300"
+```
+
+The setting limits lock waiting, not your own HTTP requests. Stale-lock
+recovery remains separate: a lock can be removed when its owner is detected
+as dead or its modification time is at least 600 seconds old. Increasing the
+wait timeout does not change that rule, so recovery may end a longer wait
+early.
+
+With `CARGO_NET_OFFLINE=true`, a cold cache fails fast instead of downloading.
 
 ## CI: online prewarm then offline build
 
