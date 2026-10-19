@@ -1,7 +1,7 @@
 //! Cache-slot lock helpers for coordinating concurrent build.rs writers.
 
-use std::fs::{self, OpenOptions};
-use std::io::Write;
+use std::fs::{self, File, OpenOptions};
+use std::io::{ErrorKind, Read, Write};
 use std::path::{Path, PathBuf};
 use std::thread::sleep;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -52,7 +52,7 @@ fn try_acquire(lock_path: &Path) -> Result<Option<SlotLockGuard>, String> {
         .open(lock_path)
     {
         Ok(file) => file,
-        Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => return Ok(None),
+        Err(err) if err.kind() == ErrorKind::AlreadyExists => return Ok(None),
         Err(err) => return Err(format!("create lock {}: {err}", lock_path.display())),
     };
     let now = SystemTime::now()
@@ -69,14 +69,28 @@ fn try_acquire(lock_path: &Path) -> Result<Option<SlotLockGuard>, String> {
 
 fn wait_for_unlock(lock_path: &Path, warn: &mut dyn FnMut(String)) -> Result<(), String> {
     let mut waited = Duration::ZERO;
-    while lock_path.exists() {
-        if is_stale(lock_path)? {
+    loop {
+        let mut lock = match File::open(lock_path) {
+            Ok(lock) => lock,
+            Err(err) if err.kind() == ErrorKind::NotFound => break,
+            Err(err) => return Err(format!("open lock {}: {err}", lock_path.display())),
+        };
+        // The peer may unlink its lock at any point. Read the PID and metadata
+        // through the same handle so release cannot turn inspection into ENOENT.
+        let stale = is_stale(&mut lock, lock_path)?;
+        drop(lock);
+        if stale {
             warn(format!(
                 "buf-tools: cache slot lock looks stale at {}. Removing stale lock.",
                 lock_path.display()
             ));
-            fs::remove_file(lock_path)
-                .map_err(|e| format!("remove stale lock {}: {e}", lock_path.display()))?;
+            match fs::remove_file(lock_path) {
+                Ok(()) => {}
+                Err(err) if err.kind() == ErrorKind::NotFound => {}
+                Err(err) => {
+                    return Err(format!("remove stale lock {}: {err}", lock_path.display()));
+                }
+            }
             return Ok(());
         }
         if waited >= LOCK_WAIT_TIMEOUT {
@@ -97,13 +111,15 @@ fn wait_for_unlock(lock_path: &Path, warn: &mut dyn FnMut(String)) -> Result<(),
     Ok(())
 }
 
-fn is_stale(lock_path: &Path) -> Result<bool, String> {
-    if let Some(owner_pid) = read_lock_pid(lock_path)?
+fn is_stale(lock: &mut File, lock_path: &Path) -> Result<bool, String> {
+    if let Some(owner_pid) = read_lock_pid(lock, lock_path)?
         && !pid_is_alive(owner_pid)
     {
         return Ok(true);
     }
-    let meta = fs::metadata(lock_path).map_err(|e| format!("stat {}: {e}", lock_path.display()))?;
+    let meta = lock
+        .metadata()
+        .map_err(|e| format!("stat {}: {e}", lock_path.display()))?;
     let modified = meta
         .modified()
         .map_err(|e| format!("mtime {}: {e}", lock_path.display()))?;
@@ -113,9 +129,10 @@ fn is_stale(lock_path: &Path) -> Result<bool, String> {
     Ok(age >= LOCK_STALE_AFTER)
 }
 
-fn read_lock_pid(lock_path: &Path) -> Result<Option<u32>, String> {
-    let content =
-        fs::read_to_string(lock_path).map_err(|e| format!("read {}: {e}", lock_path.display()))?;
+fn read_lock_pid(lock: &mut File, lock_path: &Path) -> Result<Option<u32>, String> {
+    let mut content = String::new();
+    lock.read_to_string(&mut content)
+        .map_err(|e| format!("read {}: {e}", lock_path.display()))?;
     let Some(pid_part) = content
         .split_whitespace()
         .find(|part| part.starts_with("pid="))
@@ -139,7 +156,7 @@ fn pid_is_alive(_pid: u32) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::{Arc, Mutex};
+    use std::sync::mpsc;
     use std::thread;
 
     fn test_dir(name: &str) -> PathBuf {
@@ -168,6 +185,7 @@ mod tests {
         assert!(slot.join(LOCK_FILENAME).exists());
         drop(guard);
         assert!(!slot.join(LOCK_FILENAME).exists());
+        fs::remove_dir_all(&slot).expect("cleanup");
     }
 
     #[test]
@@ -182,24 +200,144 @@ mod tests {
         writeln!(lock, "peer lock").expect("write peer lock");
         drop(lock);
 
-        let logs: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
-        let logs_for_thread = Arc::clone(&logs);
+        let (waiting, wait_started) = mpsc::channel();
         let slot_for_thread = slot.clone();
         let handle = thread::spawn(move || {
-            let mut warn = |msg: String| logs_for_thread.lock().expect("lock logs").push(msg);
-            acquire_or_wait_for_slot(&slot_for_thread, &mut warn)
+            let mut logs = Vec::new();
+            let mut warn = |msg: String| {
+                if msg.contains("Waiting for peer writer") {
+                    waiting.send(()).expect("signal waiter");
+                }
+                logs.push(msg);
+            };
+            let state = acquire_or_wait_for_slot(&slot_for_thread, &mut warn);
+            (state, logs)
         });
 
-        sleep(Duration::from_millis(300));
+        wait_started
+            .recv_timeout(Duration::from_secs(10))
+            .expect("waiter started");
         fs::remove_file(&lock_path).expect("release peer lock");
 
-        let state = handle.join().expect("thread join").expect("wait state");
+        let (state, logs) = handle.join().expect("thread join");
+        let state = state.expect("wait state");
         assert!(matches!(state, SlotLockState::WaitedForOtherWriter));
-        let joined = logs.lock().expect("lock logs").join("\n");
+        let joined = logs.join("\n");
         assert!(
             joined.contains("Waiting for peer writer")
                 && joined.contains("released cache slot lock"),
             "logs were: {joined}"
         );
+        fs::remove_dir_all(&slot).expect("cleanup");
+    }
+
+    #[test]
+    fn peer_release_before_inspection_returns_waited_state() {
+        let slot = test_dir("release-before-inspection");
+        let lock_path = slot.join(LOCK_FILENAME);
+        fs::write(&lock_path, "peer lock").expect("write peer lock");
+        let mut warn = |msg: String| {
+            if msg.contains("Waiting for peer writer") {
+                fs::remove_file(&lock_path).expect("release peer lock");
+            }
+        };
+
+        let state = acquire_or_wait_for_slot(&slot, &mut warn).expect("wait state");
+        assert!(matches!(state, SlotLockState::WaitedForOtherWriter));
+        assert!(!lock_path.exists());
+        fs::remove_dir_all(&slot).expect("cleanup");
+    }
+
+    #[test]
+    fn inspects_open_lock_after_peer_unlinks_it() {
+        let slot = test_dir("release-during-inspection");
+        let lock_path = slot.join(LOCK_FILENAME);
+        // No PID forces inspection to read the file's metadata too.
+        fs::write(&lock_path, "peer lock").expect("write peer lock");
+        let mut lock = File::open(&lock_path).expect("open peer lock");
+        fs::remove_file(&lock_path).expect("release peer lock");
+
+        assert!(!is_stale(&mut lock, &lock_path).expect("inspect released lock"));
+        drop(lock);
+        wait_for_unlock(&lock_path, &mut |_| {}).expect("observe release");
+        fs::remove_dir_all(&slot).expect("cleanup");
+    }
+
+    fn write_stale_lock(lock_path: &Path) {
+        fs::write(lock_path, "peer lock").expect("write peer lock");
+        File::options()
+            .write(true)
+            .open(lock_path)
+            .expect("open peer lock")
+            .set_modified(UNIX_EPOCH)
+            .expect("age peer lock");
+    }
+
+    #[test]
+    fn removes_stale_lock() {
+        let slot = test_dir("stale-lock");
+        let lock_path = slot.join(LOCK_FILENAME);
+        write_stale_lock(&lock_path);
+
+        wait_for_unlock(&lock_path, &mut |_| {}).expect("remove stale lock");
+        assert!(!lock_path.exists());
+        fs::remove_dir_all(&slot).expect("cleanup");
+    }
+
+    #[test]
+    fn peer_release_during_stale_cleanup_succeeds() {
+        let slot = test_dir("release-during-cleanup");
+        let lock_path = slot.join(LOCK_FILENAME);
+        write_stale_lock(&lock_path);
+        let mut peer_released = false;
+        let mut warn = |msg: String| {
+            if msg.contains("Removing stale lock") {
+                fs::remove_file(&lock_path).expect("release peer lock");
+                peer_released = true;
+            }
+        };
+
+        wait_for_unlock(&lock_path, &mut warn).expect("already released");
+        assert!(peer_released);
+        assert!(!lock_path.exists());
+        fs::remove_dir_all(&slot).expect("cleanup");
+    }
+
+    #[test]
+    fn inspection_error_is_not_ignored() {
+        let slot = test_dir("inspection-error");
+        let lock_path = slot.join(LOCK_FILENAME);
+        fs::write(&lock_path, [0xff]).expect("write invalid lock");
+
+        let err = wait_for_unlock(&lock_path, &mut |_| {}).expect_err("invalid UTF-8");
+        assert!(err.starts_with("read "), "{err}");
+        assert!(
+            err.contains(lock_path.to_str().expect("UTF-8 path")),
+            "{err}"
+        );
+        assert!(lock_path.exists());
+        fs::remove_dir_all(&slot).expect("cleanup");
+    }
+
+    #[test]
+    fn stale_removal_error_is_not_ignored() {
+        let slot = test_dir("removal-error");
+        let lock_path = slot.join(LOCK_FILENAME);
+        write_stale_lock(&lock_path);
+        let mut warn = |msg: String| {
+            if msg.contains("Removing stale lock") {
+                fs::remove_file(&lock_path).expect("release peer lock");
+                fs::create_dir(&lock_path).expect("replace with directory");
+            }
+        };
+
+        let err = wait_for_unlock(&lock_path, &mut warn).expect_err("cannot remove directory");
+        assert!(err.starts_with("remove stale lock "), "{err}");
+        assert!(
+            err.contains(lock_path.to_str().expect("UTF-8 path")),
+            "{err}"
+        );
+        assert!(lock_path.is_dir());
+        fs::remove_dir_all(&slot).expect("cleanup");
     }
 }
