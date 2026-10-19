@@ -96,12 +96,19 @@ sites, call sites, and docs aligned:
 
 1. Environment variables (highest precedence): `BUF_RS_LAYOUT_MODE`,
    `BUF_RS_BUILD_LOG`, `BUF_RS_CACHE_DIR`, `BUF_RS_RELEASE_BASE_URL`,
-   `BUF_RS_SOURCE_BASE_URL`.
+   `BUF_RS_SOURCE_BASE_URL`, `BUF_RS_CACHE_LOCK_TIMEOUT_SECS`.
 2. Workspace metadata defaults:
    `[workspace.metadata.buf-tools.config]` in the consumer `Cargo.toml`.
 3. Package metadata overrides:
    `[package.metadata.buf-tools.config]` in the consumer `Cargo.toml`.
 4. Optional env injection via `.cargo/config.toml` `[env]`.
+
+`BUF_RS_CACHE_LOCK_TIMEOUT_SECS` is shared by both crates and is
+environment-only (no metadata key). It accepts positive whole seconds,
+defaults to `120`, and leaves the existing 600-second stale-lock rule intact.
+Keep `buf-tools/build_support/lock.rs`, both `build.rs` env-rerun lists,
+the validator's environment snapshot, and all three READMEs aligned when
+changing it.
 
 Primary config resolution/consumption call sites:
 

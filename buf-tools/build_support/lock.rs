@@ -1,5 +1,6 @@
 //! Cache-slot lock helpers for coordinating concurrent build.rs writers.
 
+use std::ffi::OsStr;
 use std::fs::{self, File, OpenOptions};
 use std::io::{ErrorKind, Read, Write};
 use std::path::{Path, PathBuf};
@@ -8,7 +9,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 const LOCK_FILENAME: &str = ".cache-slot.lock";
 const LOCK_WAIT_STEP: Duration = Duration::from_millis(250);
-const LOCK_WAIT_TIMEOUT: Duration = Duration::from_secs(120);
+const LOCK_WAIT_TIMEOUT_ENV: &str = "BUF_RS_CACHE_LOCK_TIMEOUT_SECS";
+const DEFAULT_LOCK_WAIT_TIMEOUT: Duration = Duration::from_secs(120);
 const LOCK_STALE_AFTER: Duration = Duration::from_secs(600);
 
 pub enum SlotLockState {
@@ -30,19 +32,38 @@ pub fn acquire_or_wait_for_slot(
     slot: &Path,
     warn: &mut dyn FnMut(String),
 ) -> Result<SlotLockState, String> {
+    let timeout = parse_lock_wait_timeout(std::env::var_os(LOCK_WAIT_TIMEOUT_ENV).as_deref())?;
     let lock_path = slot.join(LOCK_FILENAME);
     match try_acquire(&lock_path) {
         Ok(Some(guard)) => Ok(SlotLockState::Acquired(guard)),
         Ok(None) => {
             warn(format!(
-                "buf-tools: cache slot lock exists at {}. Waiting for peer writer.",
-                lock_path.display()
+                "buf-tools: cache slot lock exists at {}. Waiting for peer writer (timeout: {}s).",
+                lock_path.display(),
+                timeout.as_secs()
             ));
-            wait_for_unlock(&lock_path, warn)?;
+            wait_for_unlock(&lock_path, timeout, warn)?;
             Ok(SlotLockState::WaitedForOtherWriter)
         }
         Err(err) => Err(err),
     }
+}
+
+fn parse_lock_wait_timeout(value: Option<&OsStr>) -> Result<Duration, String> {
+    let Some(value) = value else {
+        return Ok(DEFAULT_LOCK_WAIT_TIMEOUT);
+    };
+    let seconds = value
+        .to_str()
+        .and_then(|value| value.trim().parse::<u64>().ok())
+        .filter(|seconds| *seconds > 0)
+        .ok_or_else(|| {
+            format!(
+                "buf-tools: invalid {LOCK_WAIT_TIMEOUT_ENV}={value:?}; expected a positive whole number of seconds (default: {}s)",
+                DEFAULT_LOCK_WAIT_TIMEOUT.as_secs()
+            )
+        })?;
+    Ok(Duration::from_secs(seconds))
 }
 
 fn try_acquire(lock_path: &Path) -> Result<Option<SlotLockGuard>, String> {
@@ -67,7 +88,11 @@ fn try_acquire(lock_path: &Path) -> Result<Option<SlotLockGuard>, String> {
     }))
 }
 
-fn wait_for_unlock(lock_path: &Path, warn: &mut dyn FnMut(String)) -> Result<(), String> {
+fn wait_for_unlock(
+    lock_path: &Path,
+    timeout: Duration,
+    warn: &mut dyn FnMut(String),
+) -> Result<(), String> {
     let mut waited = Duration::ZERO;
     loop {
         let mut lock = match File::open(lock_path) {
@@ -93,11 +118,11 @@ fn wait_for_unlock(lock_path: &Path, warn: &mut dyn FnMut(String)) -> Result<(),
             }
             return Ok(());
         }
-        if waited >= LOCK_WAIT_TIMEOUT {
+        if waited >= timeout {
             return Err(format!(
-                "buf-tools: timed out waiting for cache slot lock {} after {}s",
+                "buf-tools: timed out waiting for cache slot lock {} after {}s; set {LOCK_WAIT_TIMEOUT_ENV} to a larger number of seconds for slow downloads",
                 lock_path.display(),
-                LOCK_WAIT_TIMEOUT.as_secs()
+                timeout.as_secs()
             ));
         }
         sleep(LOCK_WAIT_STEP);
@@ -259,7 +284,8 @@ mod tests {
 
         assert!(!is_stale(&mut lock, &lock_path).expect("inspect released lock"));
         drop(lock);
-        wait_for_unlock(&lock_path, &mut |_| {}).expect("observe release");
+        wait_for_unlock(&lock_path, DEFAULT_LOCK_WAIT_TIMEOUT, &mut |_| {})
+            .expect("observe release");
         fs::remove_dir_all(&slot).expect("cleanup");
     }
 
@@ -279,7 +305,8 @@ mod tests {
         let lock_path = slot.join(LOCK_FILENAME);
         write_stale_lock(&lock_path);
 
-        wait_for_unlock(&lock_path, &mut |_| {}).expect("remove stale lock");
+        wait_for_unlock(&lock_path, DEFAULT_LOCK_WAIT_TIMEOUT, &mut |_| {})
+            .expect("remove stale lock");
         assert!(!lock_path.exists());
         fs::remove_dir_all(&slot).expect("cleanup");
     }
@@ -297,7 +324,8 @@ mod tests {
             }
         };
 
-        wait_for_unlock(&lock_path, &mut warn).expect("already released");
+        wait_for_unlock(&lock_path, DEFAULT_LOCK_WAIT_TIMEOUT, &mut warn)
+            .expect("already released");
         assert!(peer_released);
         assert!(!lock_path.exists());
         fs::remove_dir_all(&slot).expect("cleanup");
@@ -309,7 +337,8 @@ mod tests {
         let lock_path = slot.join(LOCK_FILENAME);
         fs::write(&lock_path, [0xff]).expect("write invalid lock");
 
-        let err = wait_for_unlock(&lock_path, &mut |_| {}).expect_err("invalid UTF-8");
+        let err = wait_for_unlock(&lock_path, DEFAULT_LOCK_WAIT_TIMEOUT, &mut |_| {})
+            .expect_err("invalid UTF-8");
         assert!(err.starts_with("read "), "{err}");
         assert!(
             err.contains(lock_path.to_str().expect("UTF-8 path")),
@@ -331,13 +360,75 @@ mod tests {
             }
         };
 
-        let err = wait_for_unlock(&lock_path, &mut warn).expect_err("cannot remove directory");
+        let err = wait_for_unlock(&lock_path, DEFAULT_LOCK_WAIT_TIMEOUT, &mut warn)
+            .expect_err("cannot remove directory");
         assert!(err.starts_with("remove stale lock "), "{err}");
         assert!(
             err.contains(lock_path.to_str().expect("UTF-8 path")),
             "{err}"
         );
         assert!(lock_path.is_dir());
+        fs::remove_dir_all(&slot).expect("cleanup");
+    }
+
+    #[test]
+    fn lock_wait_timeout_defaults_to_120_seconds() {
+        assert_eq!(
+            parse_lock_wait_timeout(None).expect("default timeout"),
+            Duration::from_secs(120)
+        );
+    }
+
+    #[test]
+    fn lock_wait_timeout_accepts_positive_whole_seconds() {
+        for (value, seconds) in [
+            ("1", 1),
+            ("300", 300),
+            (" 900 ", 900),
+            ("18446744073709551615", u64::MAX),
+        ] {
+            assert_eq!(
+                parse_lock_wait_timeout(Some(OsStr::new(value))).expect("valid timeout"),
+                Duration::from_secs(seconds),
+                "value: {value:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn lock_wait_timeout_rejects_invalid_values() {
+        for value in ["", " ", "0", "-1", "1.5", "300s", "18446744073709551616"] {
+            let err =
+                parse_lock_wait_timeout(Some(OsStr::new(value))).expect_err("invalid timeout");
+            assert!(err.contains(LOCK_WAIT_TIMEOUT_ENV), "{err}");
+            assert!(err.contains("positive whole number of seconds"), "{err}");
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn lock_wait_timeout_rejects_non_unicode_values() {
+        use std::os::unix::ffi::OsStrExt;
+
+        let err = parse_lock_wait_timeout(Some(OsStr::from_bytes(&[0xff])))
+            .expect_err("non-Unicode timeout");
+        assert!(err.contains(LOCK_WAIT_TIMEOUT_ENV), "{err}");
+    }
+
+    #[test]
+    fn configured_timeout_stops_waiting_without_removing_peer_lock() {
+        let slot = test_dir("configured-timeout");
+        let lock_path = slot.join(LOCK_FILENAME);
+        fs::write(&lock_path, "peer lock").expect("write peer lock");
+
+        let err = wait_for_unlock(&lock_path, Duration::ZERO, &mut |_| {})
+            .expect_err("configured timeout reached");
+        assert!(err.contains("after 0s"), "{err}");
+        assert!(err.contains(LOCK_WAIT_TIMEOUT_ENV), "{err}");
+        assert!(
+            lock_path.is_file(),
+            "timing out must retain the peer's lock"
+        );
         fs::remove_dir_all(&slot).expect("cleanup");
     }
 }

@@ -20,6 +20,7 @@ use build_support::{
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("cargo:rerun-if-env-changed=BUF_RS_TOOLCHAIN_BIN_DIR");
     println!("cargo:rerun-if-env-changed=BUF_RS_CACHE_DIR");
+    println!("cargo:rerun-if-env-changed=BUF_RS_CACHE_LOCK_TIMEOUT_SECS");
     println!("cargo:rerun-if-env-changed=BUF_RS_RELEASE_BASE_URL");
     println!("cargo:rerun-if-env-changed=CARGO_INSTALL_ROOT");
     println!("cargo:rerun-if-env-changed=CARGO_HOME");

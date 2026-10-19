@@ -65,6 +65,11 @@ wins. Else `$CARGO_INSTALL_ROOT/bin` if that env is set. Else
 release assets. The default is
 `https://github.com/bufbuild/buf/releases/download/v{X.Y.Z}/`.
 
+`BUF_RS_CACHE_LOCK_TIMEOUT_SECS` sets the maximum wait for another cache
+writer in positive whole seconds (default: `120`). Both crates honor it.
+See [Concurrent cache writers](#concurrent-cache-writers) for examples and
+validation rules.
+
 `validate-cargo-buf-toolchain` is selected by the default `validate-cli`
 feature. Set `BUF_RS_VALIDATE_OFFLINE=1` to skip GitHub and crates.io.
 Pass `--yaml` for a machine-readable report (install env, bin dir rule,
@@ -90,6 +95,36 @@ DOCS_RS=1 CARGO_NET_OFFLINE=true \
 
 The same cache-slot lock as `buf-tools` serializes writers under
 `<cache-root>/<semver-core>/<target>`.
+
+The owner holds it during downloads and verification. A second build waits
+up to 120 seconds by default. Increase `BUF_RS_CACHE_LOCK_TIMEOUT_SECS` when
+building or installing on a slow connection:
+
+```bash
+BUF_RS_CACHE_LOCK_TIMEOUT_SECS=300 cargo install buf-toolchain
+```
+
+When using `buf-toolchain` as a dependency, set the variable while building
+or installing the consumer crate. The value must be a positive whole number
+of seconds that fits in a 64-bit unsigned integer. Empty, zero, negative,
+fractional, nonnumeric, and out-of-range values fail the build with an error
+naming the variable. Leaving it unset keeps the 120-second default. Changing
+it reruns `build.rs`.
+
+For a project default, use `.cargo/config.toml`:
+
+```toml
+[env]
+BUF_RS_CACHE_LOCK_TIMEOUT_SECS = "300"
+```
+
+This setting is environment-only; Cargo.toml metadata does not configure it.
+It limits waiting for a peer, not the duration of your own HTTP requests.
+Stale-lock recovery is separate: a lock can be removed when its owner is
+detected as dead or its modification time is at least 600 seconds old.
+Increasing the wait timeout does not change that rule, so recovery may end
+a longer wait early. The validator includes this variable in its environment
+report; it does not use the setting for runtime validation.
 
 ## Install
 

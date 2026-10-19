@@ -352,6 +352,7 @@ fn env_snapshot() -> Vec<EnvEntry> {
     [
         ("BUF_RS_TOOLCHAIN_BIN_DIR", "buf-toolchain"),
         ("BUF_RS_CACHE_DIR", "buf-toolchain"),
+        ("BUF_RS_CACHE_LOCK_TIMEOUT_SECS", "buf-tools, buf-toolchain"),
         ("BUF_RS_RELEASE_BASE_URL", "buf-toolchain"),
         ("BUF_RS_VALIDATE_OFFLINE", "buf-toolchain"),
         ("CARGO_INSTALL_ROOT", "cargo"),

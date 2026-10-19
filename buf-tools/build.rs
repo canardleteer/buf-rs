@@ -19,6 +19,7 @@ use build_support::{
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("cargo:rerun-if-env-changed=BUF_RS_CACHE_DIR");
+    println!("cargo:rerun-if-env-changed=BUF_RS_CACHE_LOCK_TIMEOUT_SECS");
     println!("cargo:rerun-if-env-changed=BUF_RS_INCLUDE_SOURCE");
     println!("cargo:rerun-if-env-changed=BUF_RS_RELEASE_BASE_URL");
     println!("cargo:rerun-if-env-changed=BUF_RS_SOURCE_BASE_URL");

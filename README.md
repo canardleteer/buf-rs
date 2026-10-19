@@ -91,6 +91,9 @@ buf-toolchain = "1.40.0"
   does not reach `build.rs`.
 - Otherwise binaries go to `$CARGO_HOME/bin` (or `~/.cargo/bin`).
 - `BUF_RS_CACHE_DIR` (optional) overrides the download cache root.
+- `BUF_RS_CACHE_LOCK_TIMEOUT_SECS` (optional, both crates) sets the maximum
+  wait for another cache writer in positive whole seconds. The default is
+  `120`. See [Cache lock wait timeout](#cache-lock-wait-timeout).
 - `BUF_RS_RELEASE_BASE_URL` (optional) overrides the release asset base URL for
   both crates (and runtime validation in `validate-cargo-buf-toolchain`).
 - `BUF_RS_VALIDATE_OFFLINE` (optional, `validate-cargo-buf-toolchain`): set to
@@ -122,6 +125,38 @@ BUF_RS_CACHE_DIR="$PWD/target/buf-rs-cache" \
 BUF_RS_CACHE_DIR="$PWD/target/buf-rs-cache" CARGO_NET_OFFLINE=true \
   cargo build -p buf-tools -p buf-toolchain
 ```
+
+### Cache lock wait timeout
+
+Both crates hold a cache-slot lock during downloads and verification. A second
+build waits up to 120 seconds by default. Increase
+`BUF_RS_CACHE_LOCK_TIMEOUT_SECS` when a slow connection makes another build
+hold that lock longer:
+
+```bash
+BUF_RS_CACHE_LOCK_TIMEOUT_SECS=300 cargo build -p buf-tools -p buf-toolchain
+BUF_RS_CACHE_LOCK_TIMEOUT_SECS=300 cargo install buf-toolchain
+```
+
+Set it when building or installing the consumer crate. The value must be a
+positive whole number of seconds that fits in a 64-bit unsigned integer.
+Empty, zero, negative, fractional, nonnumeric, and out-of-range values fail the
+build with an error naming the variable. Leaving it unset keeps the 120-second
+default. Changing it reruns both crates' build scripts.
+
+You can keep the setting in your project's `.cargo/config.toml`:
+
+```toml
+[env]
+BUF_RS_CACHE_LOCK_TIMEOUT_SECS = "300"
+```
+
+This setting is environment-only; Cargo.toml metadata does not configure it.
+It limits waiting for a peer, not the duration of your own HTTP requests.
+Stale-lock recovery is separate: a lock can be removed when its owner is
+detected as dead or its modification time is at least 600 seconds old.
+Increasing the wait timeout does not change that rule, so stale recovery may
+end a longer wait early.
 
 ## Which Buf version does this repo pin?
 
