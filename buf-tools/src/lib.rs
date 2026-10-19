@@ -296,3 +296,8 @@ mod release_layout;
 #[allow(dead_code)]
 #[path = "../build_support/paths.rs"]
 mod release_paths;
+
+#[cfg(all(test, not(docsrs)))]
+#[allow(dead_code)]
+#[path = "../build_support/lock.rs"]
+mod release_lock;
